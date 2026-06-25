@@ -28,7 +28,7 @@ export default function App() {
     const totalPot = 15000000;
     const totalMembers = 30;
 
-    // အမှန်တကယ်ထည့်ရမည့်ငွေ အပြောင်းအလဲဖြစ်သည့်အခါ (Parameter Type များ သတ်မှတ်ပေးထားခြင်း)
+    // အမှန်တကယ်ထည့်ရမည့်ငွေ အပြောင်းအလဲဖြစ်သည့်အခါ
     const handleActualPaidChange = (index: number, value: string) => {
         setActualPaid(prev => ({
             ...prev,
@@ -49,8 +49,21 @@ export default function App() {
             <div className="max-w-7xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow-lg">
                 <h1 className="text-xl md:text-2xl font-bold mb-6 text-center text-blue-900">စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်</h1>
 
-                <div className="overflow-x-auto pb-4">
-                    <table className="w-full text-sm text-left border-collapse border border-gray-300 min-w-[1000px]">
+                {/* Scrollbar ကို အပေါ်ပို့ရန်နှင့် ဆွဲရလွယ်အောင် CSS ဖြင့် ပြင်ဆင်ထားခြင်း */}
+                <div 
+                    className="overflow-x-auto pb-3 mb-4
+                    [&::-webkit-scrollbar]:h-3.5
+                    [&::-webkit-scrollbar-track]:bg-gray-200 
+                    [&::-webkit-scrollbar-track]:rounded-full
+                    [&::-webkit-scrollbar-thumb]:bg-blue-400 
+                    [&::-webkit-scrollbar-thumb]:rounded-full
+                    hover:[&::-webkit-scrollbar-thumb]:bg-blue-600"
+                    style={{ transform: 'rotateX(180deg)' }}
+                >
+                    <table 
+                        className="w-full text-sm text-left border-collapse border border-gray-300 min-w-[1000px]"
+                        style={{ transform: 'rotateX(180deg)' }}
+                    >
                         <thead>
                             <tr className="bg-gray-200">
                                 <th className="p-2 border text-center whitespace-nowrap">No</th>
