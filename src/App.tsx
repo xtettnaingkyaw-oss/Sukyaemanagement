@@ -21,7 +21,7 @@ const db = getFirestore(app);
 // ==========================================
 const groups = [
     {
-        id: "group_150_5days",
+        id: "currentSeason", // 🔴 ယခင်သိမ်းခဲ့သော Data များကို ပြန်ခေါ်ရန် ID အဟောင်းအတိုင်း ပြန်ထားပေးထားပါသည်
         name: "သိန်း (၁၅၀) စု ၊ ၅ ရက်တစ်ခါ",
         totalPot: 15000000,
         basePerPerson: 500000,
@@ -93,6 +93,7 @@ export default function App() {
                 setActualPaid(data.actualPaid || {});
                 setWhoTakes(data.whoTakes || {});
             } else {
+                // Database တွင် မရှိသေးပါက အလွတ်ပြမည်
                 setActualPaid({});
                 setWhoTakes({});
             }
