@@ -318,18 +318,21 @@ export default function App() {
     return (
         <div className="bg-stone-50 min-h-screen font-sans pb-20 selection:bg-emerald-200">
             {/* Branding Header */}
-            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-3 md:p-4 shadow-lg flex flex-col md:flex-row justify-between items-center mb-8 border-b-4 border-[#cfad5e]">
-                <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto justify-center">
-                    {/* လိုဂိုပုံ အသစ်ထည့်သွင်းထားသော နေရာ */}
-                    <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 rounded-full flex items-center justify-center border-2 border-[#cfad5e] overflow-hidden bg-white shadow-sm">
-                        <img src="/logo.jpg" alt="Miba Ayate Logo" className="w-full h-full object-cover" />
-                    </div>
+            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-3 md:p-4 shadow-lg flex flex-col md:flex-row justify-between items-center mb-8 border-b-4 border-[#cfad5e] gap-3">
+                <div className="flex items-center gap-2 md:gap-3 justify-center">
+                    {/* လိုဂိုပုံကို Size အသေချိတ်ထားခြင်း (CSS မဝင်လည်း ပုံမကြီးအောင် style ဖြင့် ထိန်းထားသည်) */}
+                    <img 
+                        src="/logo.jpg" 
+                        alt="Miba Ayate Logo" 
+                        className="shadow-sm"
+                        style={{ width: '45px', height: '45px', minWidth: '45px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #cfad5e', flexShrink: 0 }}
+                    />
                     
                     <div className="font-bold text-[13px] sm:text-base md:text-xl tracking-wide uppercase whitespace-nowrap text-center">
                         မိဘအရိပ်စုကြေးများ | HTET NAING KYAW
                     </div>
                 </div>
-                <div className="text-[#0b3c1a] text-xs md:text-sm font-bold mt-2 md:mt-0 bg-[#cfad5e] px-3 md:px-4 py-1.5 rounded-full shadow-inner">
+                <div className="text-[#0b3c1a] text-xs md:text-sm font-bold bg-[#cfad5e] px-3 md:px-4 py-1.5 rounded-full shadow-inner">
                     စုကြေးစီမံခန့်ခွဲမှုစနစ်
                 </div>
             </div>
