@@ -293,7 +293,6 @@ export default function App() {
                 const paidAmt = allActualPaid[g.id]?.[index] || 0;
                 const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
                 
-                // လေလံမဆွဲရသေးပါက ကြမ်းခင်းစျေးဖြင့် ခန့်မှန်းတွက်ချက်ရန်
                 const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
@@ -314,16 +313,21 @@ export default function App() {
     return (
         <div className="bg-stone-50 min-h-screen font-sans pb-20 selection:bg-emerald-200">
             {/* Branding Header */}
-            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-4 shadow-lg flex flex-col md:flex-row justify-between items-center mb-8 border-b-4 border-[#cfad5e]">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#cfad5e] rounded-full flex items-center justify-center border-2 border-[#0b3c1a] overflow-hidden">
-                        <svg className="w-6 h-6 text-[#0b3c1a]" fill="currentColor" viewBox="0 0 24 24">
+            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-3 md:p-4 shadow-lg flex flex-col md:flex-row justify-between items-center mb-8 border-b-4 border-[#cfad5e]">
+                <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-[#cfad5e] rounded-full flex items-center justify-center border-2 border-[#0b3c1a] overflow-hidden">
+                        <svg className="w-5 h-5 md:w-6 md:h-6 text-[#0b3c1a]" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.64-2.25 1.64-1.74 0-2.1-.96-2.17-1.92H8.01c.09 1.96 1.42 3.13 2.89 3.55V20h2.2v-1.64c1.8-.3 3.01-1.4 3.01-3.11 0-1.84-1.3-2.73-3.8-3.37z" />
                         </svg>
                     </div>
-                    <div className="font-bold text-lg md:text-xl tracking-wide uppercase">မိဘအရိပ်စုကြေးများ | HTET NAING KYAW</div>
+                    {/* ဖုန်းတွင် တစ်ကြောင်းတည်းပေါ်စေရန် whitespace-nowrap နှင့် text-[13px] အသုံးပြုထားသည် */}
+                    <div className="font-bold text-[13px] sm:text-base md:text-xl tracking-wide uppercase whitespace-nowrap text-center">
+                        မိဘအရိပ်စုကြေးများ | HTET NAING KYAW
+                    </div>
                 </div>
-                <div className="text-[#0b3c1a] text-sm font-bold mt-2 md:mt-0 bg-[#cfad5e] px-4 py-1.5 rounded-full shadow-inner">စုကြေးစီမံခန့်ခွဲမှုစနစ်</div>
+                <div className="text-[#0b3c1a] text-xs md:text-sm font-bold mt-2 md:mt-0 bg-[#cfad5e] px-3 md:px-4 py-1.5 rounded-full shadow-inner">
+                    စုကြေးစီမံခန့်ခွဲမှုစနစ်
+                </div>
             </div>
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
