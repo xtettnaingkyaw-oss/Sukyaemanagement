@@ -21,8 +21,8 @@ const db = getFirestore(app);
 // ==========================================
 const groups = [
     {
-        id: "currentSeason", // 🔴 ယခင်သိမ်းခဲ့သော Data များကို ပြန်ခေါ်ရန် ID အဟောင်းအတိုင်း ပြန်ထားပေးထားပါသည်
-        name: "သိန်း (၁၅၀) စု ၊ ၅ ရက်တစ်ခါ",
+        id: "currentSeason",
+        name: "သိန်း (၁၅၀) စု ၊ လူ (၃၀) ဦး ၊ ၅ ရက်တစ်ခါ", // 🔴 ခေါင်းစဉ်တွင် လူဦးရေ ထည့်သွင်းထားပါသည်
         totalPot: 15000000,
         basePerPerson: 500000,
         totalMembers: 30,
@@ -46,7 +46,7 @@ const groups = [
     },
     {
         id: "group_300_10days",
-        name: "သိန်း (၃၀၀) စု ၊ ၁၀ ရက်တစ်ခါ",
+        name: "သိန်း (၃၀၀) စု ၊ လူ (၃၀) ဦး ၊ ၁၀ ရက်တစ်ခါ", // 🔴 ခေါင်းစဉ်တွင် လူဦးရေ ထည့်သွင်းထားပါသည်
         totalPot: 30000000,
         basePerPerson: 1000000,
         totalMembers: 30,
@@ -210,7 +210,7 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col items-center justify-center mb-6 relative">
-                    <h1 className="text-2xl md:text-3xl font-bold text-blue-900 drop-shadow-sm text-center">
+                    <h1 className="text-2xl md:text-3xl font-bold text-blue-900 drop-shadow-sm text-center leading-relaxed">
                         {currentGroup.name}
                     </h1>
                     
