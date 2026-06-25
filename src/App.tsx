@@ -1,4 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+
+// သင့်ဝဘ်ဆိုဒ်အတွက် Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCaj4-h25RdDKPWS1ECUs6u_0RMTUmvS8Y",
+  authDomain: "mibaayatesukyae.firebaseapp.com",
+  projectId: "mibaayatesukyae",
+  storageBucket: "mibaayatesukyae.firebasestorage.app",
+  messagingSenderId: "939584931821",
+  appId: "1:939584931821:web:0de8dee78677cd002289e4",
+  measurementId: "G-VTZLL0DMXJ"
+};
+
+// Firebase နှင့် Database ကို စတင်ချိတ်ဆက်ခြင်း
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const auctionData = [
     {n: 1, date: "25.1.26", price: 15000000}, {n: 2, date: "30.1.26", price: 11000000},
@@ -21,26 +38,62 @@ const auctionData = [
 export default function App() {
     const [actualPaid, setActualPaid] = useState<Record<number, number>>({});
     const [whoTakes, setWhoTakes] = useState<Record<number, string>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
 
     const basePerPerson = 500000; 
     const totalPot = 15000000;
     const totalMembers = 30;
 
+    useEffect(() => {
+        const docRef = doc(db, "auctionData", "currentSeason");
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setActualPaid(data.actualPaid || {});
+                setWhoTakes(data.whoTakes || {});
+            }
+            setIsLoaded(true);
+        }, (error) => {
+            console.error("Firebase ဖတ်ရာတွင် အမှားဖြစ်နေပါသည်:", error);
+            setIsLoaded(true);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const saveToFirebase = async (newActualPaid: Record<number, number>, newWhoTakes: Record<number, string>) => {
+        setIsSaving(true);
+        try {
+            await setDoc(doc(db, "auctionData", "currentSeason"), {
+                actualPaid: newActualPaid,
+                whoTakes: newWhoTakes,
+                lastUpdated: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error("Firebase သို့သိမ်းဆည်းရာတွင် အမှားဖြစ်နေပါသည်:", error);
+        }
+        setTimeout(() => setIsSaving(false), 800);
+    };
+
     const handleActualPaidChange = (index: number, value: string) => {
-        setActualPaid(prev => ({
-            ...prev,
+        const newPaid = {
+            ...actualPaid,
             [index]: parseInt(value) || 0
-        }));
+        };
+        setActualPaid(newPaid);
+        saveToFirebase(newPaid, whoTakes);
     };
 
     const handleWhoChange = (index: number, value: string) => {
-        setWhoTakes(prev => ({
-            ...prev,
+        const newWhoTakes = {
+            ...whoTakes,
             [index]: value
-        }));
+        };
+        setWhoTakes(newWhoTakes);
+        saveToFirebase(actualPaid, newWhoTakes);
     };
 
-    // တွက်ချက်မှုများ
     const calculateRowData = (index: number) => {
         const currentPaid = actualPaid[index] || 0;
         const isSelf = whoTakes[index] === 'self';
@@ -61,21 +114,41 @@ export default function App() {
         return { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
+    if (!isLoaded) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 font-bold text-blue-600 text-lg">
+                ဒေတာများကို ဆွဲယူနေပါသည်... 
+            </div>
+        );
+    }
+
     return (
         <div className="bg-gray-50 min-h-screen p-3 md:p-6 font-sans">
             <div className="max-w-7xl mx-auto">
-                <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center text-blue-900 drop-shadow-sm">
-                    စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်
-                </h1>
+                <div className="flex flex-col items-center justify-center mb-8 relative">
+                    <h1 className="text-2xl md:text-3xl font-bold text-blue-900 drop-shadow-sm text-center">
+                        စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်
+                    </h1>
+                    
+                    <div className="h-6 mt-2">
+                        {isSaving ? (
+                            <span className="text-sm font-semibold text-orange-600 bg-orange-100 px-3 py-1.5 rounded-full animate-pulse shadow-sm">
+                                Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်...
+                            </span>
+                        ) : (
+                            <span className="text-sm font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full shadow-sm">
+                                ဒေတာများ သိမ်းဆည်းပြီးပါပြီ ✓
+                            </span>
+                        )}
+                    </div>
+                </div>
 
-                {/* ဖုန်း၊ iPad နှင့် PC အားလုံးအတွက် Card ဒီဇိုင်း (Grid ဖြင့် နေရာချထားခြင်း) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                     {auctionData.map((row, index) => {
                         const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
                         
                         return (
                             <div key={index} className={`rounded-xl shadow-md border p-4 transition-all hover:shadow-lg ${isSelf ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
-                                {/* Card Header */}
                                 <div className="flex justify-between items-center border-b pb-3 mb-3">
                                     <span className="font-bold text-lg text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
                                         အလှည့် {row.n}
@@ -83,14 +156,12 @@ export default function App() {
                                     <span className="text-gray-600 font-semibold">{row.date}</span>
                                 </div>
                                 
-                                {/* Card Body */}
                                 <div className="space-y-4 text-sm">
                                     <div className="flex justify-between items-center px-1">
                                         <span className="text-gray-500">ကြမ်းခင်းစျေး:</span>
                                         <span className="font-bold text-base">{row.price.toLocaleString()}</span>
                                     </div>
 
-                                    {/* ထည့်သွင်းရမည့် အကွက်များ */}
                                     <div className="grid grid-cols-2 gap-3 pt-1">
                                         <div>
                                             <label className="block text-gray-500 text-xs mb-1 font-medium">ထည့်ရမည့်ငွေ</label>
@@ -115,7 +186,6 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    {/* တွက်ချက်မှု ရလဒ်များ */}
                                     <div className="bg-gray-50 rounded-lg p-3 space-y-2.5 border">
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-500">ရရှိသွားသောငွေ:</span>
@@ -135,7 +205,6 @@ export default function App() {
                         );
                     })}
                 </div>
-
             </div>
         </div>
     );
