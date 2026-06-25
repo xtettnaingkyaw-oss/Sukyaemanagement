@@ -170,7 +170,7 @@ export default function App() {
     const [viewMode, setViewMode] = useState<'dashboard' | 'group'>('dashboard');
     const [selectedGroupId, setSelectedGroupId] = useState(groups[0].id);
 
-    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန် (Dashboard တွင် တွက်ချက်ရန်)
+    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန်
     const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
     const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -182,7 +182,6 @@ export default function App() {
     const currentActualPaid = allActualPaid[selectedGroupId] || {};
     const currentWhoTakes = allWhoTakes[selectedGroupId] || {};
 
-    // App စဖွင့်ချိန်တွင် အဖွဲ့ (၆) ဖွဲ့လုံး၏ Data ကို တပြိုင်နက်တည်း ဆွဲယူခြင်း
     useEffect(() => {
         setIsLoaded(false);
         const unsubscribes = groups.map(g => {
@@ -254,9 +253,6 @@ export default function App() {
         return { currentPaid: paid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
-    // ==========================================
-    // Group Dashboard တွက်ချက်မှုများ
-    // ==========================================
     let totalReceived = 0;
     let totalGrossLoss = 0;
     let totalOtherProfit = 0;
@@ -281,14 +277,11 @@ export default function App() {
     const isNetProfit = netAmount > 0;
     const isNetLoss = netAmount < 0;
 
-    // ==========================================
-    // All Groups Timeline Dashboard တွက်ချက်မှုများ
-    // ==========================================
     let timeline: Record<string, any[]> = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() - 3); // လွန်ခဲ့သော ၃ ရက်မှစ၍ ပြသမည်
+    checkDate.setDate(today.getDate() - 3);
 
     groups.forEach(g => {
         g.data.forEach((row, index) => {
@@ -312,7 +305,7 @@ export default function App() {
         });
     });
 
-    const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 20); // အနီးစပ်ဆုံး ရက် ၂၀ သာပြမည်
+    const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 20);
 
     return (
         <div className="bg-stone-50 min-h-screen font-sans pb-20 selection:bg-emerald-200">
@@ -354,9 +347,6 @@ export default function App() {
                     </div>
                 ) : viewMode === 'dashboard' ? (
                     
-                    /* ==========================================
-                       ပေါင်းချုပ် Dashboard View 
-                    ========================================== */
                     <div className="max-w-4xl mx-auto space-y-6">
                         <div className="mb-6 border-l-4 border-[#0b3c1a] pl-4">
                             <h2 className="text-2xl font-black text-gray-800">လာမည့် အလှည့်များ (Upcoming)</h2>
@@ -432,9 +422,6 @@ export default function App() {
 
                 ) : (
 
-                    /* ==========================================
-                       အဖွဲ့အလိုက် Group Detail View 
-                    ========================================== */
                     <>
                         <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-10 pb-6 border-b border-gray-200">
                             {groups.map(group => (
@@ -471,7 +458,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Group Dashboard */}
                         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 md:p-7 mb-10 overflow-hidden relative">
                             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#0b3c1a] via-[#cfad5e] to-[#0b3c1a]"></div>
                             <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 pb-3 border-b border-gray-100 flex items-center gap-2">
@@ -518,7 +504,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Cards Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
                             {auctionData.map((row, index) => {
                                 const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
@@ -607,4 +592,3 @@ export default function App() {
         </div>
     );
 }
-```eof
