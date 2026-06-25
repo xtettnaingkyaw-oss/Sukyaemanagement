@@ -94,6 +94,7 @@ export default function App() {
         saveToFirebase(actualPaid, newWhoTakes);
     };
 
+    // Card တစ်ခုချင်းစီအတွက် တွက်ချက်မှု
     const calculateRowData = (index: number) => {
         const currentPaid = actualPaid[index] || 0;
         const isSelf = whoTakes[index] === 'self';
@@ -114,6 +115,33 @@ export default function App() {
         return { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
+    // ==========================================
+    // ထိပ်ဆုံး Dashboard အတွက် စုစုပေါင်း တွက်ချက်ခြင်း
+    // ==========================================
+    let totalReceived = 0;      // မိမိရငွေ စုစုပေါင်း
+    let totalGrossLoss = 0;     // ၁၅၀ ပေါ် ရှုံးငွေ စုစုပေါင်း
+    let totalOtherProfit = 0;   // အခြားသူများဆီမှ မိမိရမြတ်ငွေ စုစုပေါင်း
+    const selfTurns: number[] = []; // မိမိယူခဲ့သော အလှည့်များ
+
+    auctionData.forEach((row, index) => {
+        const currentPaid = actualPaid[index] || 0;
+        if (currentPaid > 0) {
+            if (whoTakes[index] === 'self') {
+                selfTurns.push(row.n);
+                const received = currentPaid * totalMembers;
+                totalReceived += received;
+                totalGrossLoss += (totalPot - received);
+            } else {
+                const profit = basePerPerson - currentPaid;
+                totalOtherProfit += profit;
+            }
+        }
+    });
+
+    const netAmount = totalOtherProfit - totalGrossLoss;
+    const isNetProfit = netAmount > 0;
+    const isNetLoss = netAmount < 0;
+
     if (!isLoaded) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 font-bold text-blue-600 text-lg">
@@ -123,9 +151,9 @@ export default function App() {
     }
 
     return (
-        <div className="bg-gray-50 min-h-screen p-3 md:p-6 font-sans">
+        <div className="bg-gray-50 min-h-screen p-3 md:p-6 font-sans pb-20">
             <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col items-center justify-center mb-8 relative">
+                <div className="flex flex-col items-center justify-center mb-6 relative">
                     <h1 className="text-2xl md:text-3xl font-bold text-blue-900 drop-shadow-sm text-center">
                         စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်
                     </h1>
@@ -143,42 +171,94 @@ export default function App() {
                     </div>
                 </div>
 
+                {/* ==========================================
+                    အသားတင် ရှုံး/မြတ် Dashboard
+                ========================================== */}
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 md:p-6 mb-8">
+                    <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center gap-2">
+                        📊 အသားတင် ရှုံး/မြတ် အကျဉ်းချုပ်
+                    </h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {/* (၁) မိမိရငွေ */}
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col justify-center">
+                            <div className="text-sm text-blue-700 font-semibold mb-1">
+                                မိမိယူခဲ့သော အလှည့်များ <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full text-xs ml-1">{selfTurns.length > 0 ? selfTurns.join(', ') : '-'}</span>
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">တကယ်ရလိုက်သော စုစုပေါင်းငွေ</div>
+                            <div className="text-2xl font-black text-blue-800">
+                                {totalReceived > 0 ? totalReceived.toLocaleString() : '0'}
+                            </div>
+                        </div>
+
+                        {/* (၂) အကြမ်းဖျင်း ရှုံးငွေ (၁၅၀ ပေါ်) */}
+                        <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col justify-center">
+                            <div className="text-sm text-red-700 font-semibold mb-1">မိမိအလှည့် ရှုံးငွေ</div>
+                            <div className="text-xs text-gray-500 mb-1">မဲကြေး ၁၅၀ သိန်းအပေါ် ရှုံးငွေစုစုပေါင်း</div>
+                            <div className="text-2xl font-black text-red-600">
+                                {totalGrossLoss > 0 ? totalGrossLoss.toLocaleString() : '0'}
+                            </div>
+                        </div>
+
+                        {/* (၃) အခြားသူများဆီမှ အမြတ် */}
+                        <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex flex-col justify-center">
+                            <div className="text-sm text-green-700 font-semibold mb-1">အခြားအလှည့်များမှ အမြတ်</div>
+                            <div className="text-xs text-gray-500 mb-1">ကိုယ်မယူလိုက်သောအလှည့်များမှ မြတ်ငွေပေါင်း</div>
+                            <div className="text-2xl font-black text-green-600">
+                                {totalOtherProfit > 0 ? totalOtherProfit.toLocaleString() : '0'}
+                            </div>
+                        </div>
+
+                        {/* (၄) အသားတင် ရလဒ် */}
+                        <div className={`p-4 rounded-xl border flex flex-col justify-center shadow-inner ${isNetLoss ? 'bg-red-100 border-red-300' : isNetProfit ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-300'}`}>
+                            <div className={`text-sm font-bold mb-1 ${isNetLoss ? 'text-red-800' : isNetProfit ? 'text-green-800' : 'text-gray-600'}`}>
+                                ⚖️ အသားတင် {isNetLoss ? 'ရှုံးငွေ' : isNetProfit ? 'မြတ်ငွေ' : 'ရလဒ်'}
+                            </div>
+                            <div className="text-xs text-gray-600 mb-1">(အမြတ်စုစုပေါင်း - မိမိအလှည့်ရှုံးငွေ)</div>
+                            <div className={`text-3xl font-black ${isNetLoss ? 'text-red-700' : isNetProfit ? 'text-green-700' : 'text-gray-700'}`}>
+                                {Math.abs(netAmount).toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {/* ========================================== */}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                     {auctionData.map((row, index) => {
                         const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
                         
                         return (
-                            <div key={index} className={`rounded-xl shadow-md border p-4 transition-all hover:shadow-lg ${isSelf ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
-                                <div className="flex justify-between items-center border-b pb-3 mb-3">
-                                    <span className="font-bold text-lg text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
+                            <div key={index} className={`rounded-2xl shadow-sm border p-5 transition-all hover:shadow-md ${isSelf ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : 'bg-white border-gray-200'}`}>
+                                <div className="flex justify-between items-center border-b pb-4 mb-4">
+                                    <span className={`font-bold text-lg px-4 py-1 rounded-full ${isSelf ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-800'}`}>
                                         အလှည့် {row.n}
                                     </span>
-                                    <span className="text-gray-600 font-semibold">{row.date}</span>
+                                    <span className="text-gray-500 font-medium text-sm">{row.date}</span>
                                 </div>
                                 
-                                <div className="space-y-4 text-sm">
+                                <div className="space-y-5 text-sm">
                                     <div className="flex justify-between items-center px-1">
                                         <span className="text-gray-500">ကြမ်းခင်းစျေး:</span>
-                                        <span className="font-bold text-base">{row.price.toLocaleString()}</span>
+                                        <span className="font-bold text-gray-700 text-base">{row.price.toLocaleString()}</span>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3 pt-1">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-gray-500 text-xs mb-1 font-medium">ထည့်ရမည့်ငွေ</label>
+                                            <label className="block text-gray-500 text-xs mb-1.5 font-semibold">ထည့်ရမည့်ငွေ</label>
                                             <input 
                                                 type="number" 
                                                 value={currentPaid || ''}
                                                 onChange={(e) => handleActualPaidChange(index, e.target.value)}
-                                                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 transition-colors"
+                                                className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
                                                 placeholder="ဥပမာ- ၃၅၀၀၀၀"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-gray-500 text-xs mb-1 font-medium">ယူမည့်သူ</label>
+                                            <label className="block text-gray-500 text-xs mb-1.5 font-semibold">ယူမည့်သူ</label>
                                             <select 
                                                 value={whoTakes[index] || 'other'}
                                                 onChange={(e) => handleWhoChange(index, e.target.value)}
-                                                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 transition-colors"
+                                                className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
                                             >
                                                 <option value="other">အခြားသူ</option>
                                                 <option value="self">မိမိယူမည်</option>
@@ -186,17 +266,17 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    <div className="bg-gray-50 rounded-lg p-3 space-y-2.5 border">
+                                    <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-100 shadow-inner">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-500">ရရှိသွားသောငွေ:</span>
+                                            <span className="text-gray-500 font-medium">ရရှိသွားသောငွေ:</span>
                                             <span className="font-bold text-blue-700 text-base">{receivedAmount}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-500">ကျန်သူများမြတ်ငွေ:</span>
+                                            <span className="text-gray-500 font-medium">ကျန်သူများမြတ်ငွေ:</span>
                                             <span className="font-bold text-green-600 text-base">{profitAmount}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-500">ယူသူရှုံးငွေ (၁၅၀အပေါ်):</span>
+                                            <span className="text-gray-500 font-medium">ယူသူရှုံးငွေ (၁၅၀အပေါ်):</span>
                                             <span className="font-bold text-red-600 text-base">{lossAmount}</span>
                                         </div>
                                     </div>
