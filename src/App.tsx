@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const auctionData = [
     {n: 1, date: "25.1.26", price: 15000000}, {n: 2, date: "30.1.26", price: 11000000},
@@ -19,17 +19,17 @@ const auctionData = [
 ];
 
 export default function App() {
-    // State များကို သိမ်းဆည်းရန်
-    const [actualPaid, setActualPaid] = useState({});
-    const [whoTakes, setWhoTakes] = useState({});
+    // State များကို TypeScript Record Type ဖြင့် သိမ်းဆည်းရန်
+    const [actualPaid, setActualPaid] = useState<Record<number, number>>({});
+    const [whoTakes, setWhoTakes] = useState<Record<number, string>>({});
 
     // ပုံသေ အချက်အလက်များ
     const basePerPerson = 500000; 
     const totalPot = 15000000;
     const totalMembers = 30;
 
-    // အမှန်တကယ်ထည့်ရမည့်ငွေ အပြောင်းအလဲဖြစ်သည့်အခါ
-    const handleActualPaidChange = (index, value) => {
+    // အမှန်တကယ်ထည့်ရမည့်ငွေ အပြောင်းအလဲဖြစ်သည့်အခါ (Parameter Type များ သတ်မှတ်ပေးထားခြင်း)
+    const handleActualPaidChange = (index: number, value: string) => {
         setActualPaid(prev => ({
             ...prev,
             [index]: parseInt(value) || 0
@@ -37,7 +37,7 @@ export default function App() {
     };
 
     // မိမိ/အခြားသူ ရွေးချယ်မှု အပြောင်းအလဲဖြစ်သည့်အခါ
-    const handleWhoChange = (index, value) => {
+    const handleWhoChange = (index: number, value: string) => {
         setWhoTakes(prev => ({
             ...prev,
             [index]: value
