@@ -82,7 +82,7 @@ export default function App() {
             [index]: parseInt(value) || 0
         };
         setActualPaid(newPaid);
-        saveToFirebase(newPaid, whoTakes);
+        // (အမှန်ခြစ် နှိပ်မှ သိမ်းရန် ဤနေရာမှ Auto-save ကို ဖြုတ်ထားပါသည်)
     };
 
     const handleWhoChange = (index: number, value: string) => {
@@ -91,13 +91,16 @@ export default function App() {
             [index]: value
         };
         setWhoTakes(newWhoTakes);
+        // Dropdown ပြောင်းလျှင် အလိုအလျောက် သိမ်းပါမည်
         saveToFirebase(actualPaid, newWhoTakes);
     };
 
     // Card တစ်ခုချင်းစီအတွက် တွက်ချက်မှု
     const calculateRowData = (index: number) => {
+        const row = auctionData[index];
         const currentPaid = actualPaid[index] || 0;
-        const isSelf = whoTakes[index] === 'self';
+        // အလှည့် ၁ သည် အမြဲတမ်း "စုကြေးဒိုင်" ဖြစ်သောကြောင့် 'self' အဖြစ် မသတ်မှတ်ပါ
+        const isSelf = whoTakes[index] === 'self' && row.n !== 1;
         
         let receivedAmount = '-';
         let profitAmount = '-';
@@ -126,12 +129,14 @@ export default function App() {
     auctionData.forEach((row, index) => {
         const currentPaid = actualPaid[index] || 0;
         if (currentPaid > 0) {
-            if (whoTakes[index] === 'self') {
+            // အလှည့် ၁ (row.n === 1) သည် မိမိ 'self' မဖြစ်နိုင်ပါ (ဒိုင်ယူဖြစ်သည်)
+            if (whoTakes[index] === 'self' && row.n !== 1) {
                 selfTurns.push(row.n);
                 const received = currentPaid * totalMembers;
                 totalReceived += received;
                 totalGrossLoss += (totalPot - received);
-            } else {
+            } else if (row.n !== 1) {
+                // အခြားသူများ ယူသောအလှည့်မှ အမြတ်ငွေ (အလှည့် ၁ မှလွဲ၍)
                 const profit = basePerPerson - currentPaid;
                 totalOtherProfit += profit;
             }
@@ -180,7 +185,6 @@ export default function App() {
                     </h2>
                     
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* (၁) မိမိရငွေ */}
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col justify-center">
                             <div className="text-sm text-blue-700 font-semibold mb-1">
                                 မိမိယူခဲ့သော အလှည့်များ <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full text-xs ml-1">{selfTurns.length > 0 ? selfTurns.join(', ') : '-'}</span>
@@ -191,7 +195,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* (၂) အကြမ်းဖျင်း ရှုံးငွေ (၁၅၀ ပေါ်) */}
                         <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col justify-center">
                             <div className="text-sm text-red-700 font-semibold mb-1">မိမိအလှည့် ရှုံးငွေ</div>
                             <div className="text-xs text-gray-500 mb-1">မဲကြေး ၁၅၀ သိန်းအပေါ် ရှုံးငွေစုစုပေါင်း</div>
@@ -200,7 +203,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* (၃) အခြားသူများဆီမှ အမြတ် */}
                         <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex flex-col justify-center">
                             <div className="text-sm text-green-700 font-semibold mb-1">အခြားအလှည့်များမှ အမြတ်</div>
                             <div className="text-xs text-gray-500 mb-1">ကိုယ်မယူလိုက်သောအလှည့်များမှ မြတ်ငွေပေါင်း</div>
@@ -209,7 +211,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* (၄) အသားတင် ရလဒ် */}
                         <div className={`p-4 rounded-xl border flex flex-col justify-center shadow-inner ${isNetLoss ? 'bg-red-100 border-red-300' : isNetProfit ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-300'}`}>
                             <div className={`text-sm font-bold mb-1 ${isNetLoss ? 'text-red-800' : isNetProfit ? 'text-green-800' : 'text-gray-600'}`}>
                                 ⚖️ အသားတင် {isNetLoss ? 'ရှုံးငွေ' : isNetProfit ? 'မြတ်ငွေ' : 'ရလဒ်'}
@@ -245,24 +246,43 @@ export default function App() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-gray-500 text-xs mb-1.5 font-semibold">ထည့်ရမည့်ငွေ</label>
-                                            <input 
-                                                type="number" 
-                                                value={currentPaid || ''}
-                                                onChange={(e) => handleActualPaidChange(index, e.target.value)}
-                                                className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
-                                                placeholder="ဥပမာ- ၃၅၀၀၀၀"
-                                            />
+                                            <div className="flex gap-1.5">
+                                                <input 
+                                                    type="number" 
+                                                    value={currentPaid || ''}
+                                                    onChange={(e) => handleActualPaidChange(index, e.target.value)}
+                                                    className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
+                                                    placeholder="၃၅၀၀၀၀"
+                                                />
+                                                {/* Save Button (အမှန်ခြစ်) */}
+                                                <button 
+                                                    onClick={() => saveToFirebase(actualPaid, whoTakes)}
+                                                    className="bg-green-500 hover:bg-green-600 text-white px-3 rounded-xl shadow-sm transition-colors flex items-center justify-center"
+                                                    title="သိမ်းမည်"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="block text-gray-500 text-xs mb-1.5 font-semibold">ယူမည့်သူ</label>
-                                            <select 
-                                                value={whoTakes[index] || 'other'}
-                                                onChange={(e) => handleWhoChange(index, e.target.value)}
-                                                className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
-                                            >
-                                                <option value="other">အခြားသူ</option>
-                                                <option value="self">မိမိယူမည်</option>
-                                            </select>
+                                            {/* အလှည့် ၁ ဆိုလျှင် အသေလုပ်ထားမည် */}
+                                            {row.n === 1 ? (
+                                                <div className="w-full p-2.5 border border-blue-200 rounded-xl bg-blue-50 text-blue-800 font-bold text-center shadow-sm">
+                                                    👑 စုကြေးဒိုင်
+                                                </div>
+                                            ) : (
+                                                <select 
+                                                    value={whoTakes[index] || 'other'}
+                                                    onChange={(e) => handleWhoChange(index, e.target.value)}
+                                                    className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
+                                                >
+                                                    <option value="other">အခြားသူ</option>
+                                                    <option value="self">မိမိယူမည်</option>
+                                                </select>
+                                            )}
                                         </div>
                                     </div>
 
