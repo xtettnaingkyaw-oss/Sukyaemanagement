@@ -82,7 +82,7 @@ export default function App() {
             [index]: parseInt(value) || 0
         };
         setActualPaid(newPaid);
-        // (အမှန်ခြစ် နှိပ်မှ သိမ်းရန် ဤနေရာမှ Auto-save ကို ဖြုတ်ထားပါသည်)
+        // (အမှန်ခြစ် နှိပ်မှ သိမ်းရန် Auto-save ကို ဖြုတ်ထားပါသည်)
     };
 
     const handleWhoChange = (index: number, value: string) => {
@@ -187,7 +187,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col justify-center">
                             <div className="text-sm text-blue-700 font-semibold mb-1">
-                                မိမိယူခဲ့သော အလှည့်များ <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full text-xs ml-1">{selfTurns.length > 0 ? selfTurns.join(', ') : '-'}</span>
+                                မိမိယူလိုက်သည့်အလှည့် <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full text-xs ml-1">{selfTurns.length > 0 ? selfTurns.join(', ') : '-'}</span>
                             </div>
                             <div className="text-xs text-gray-500 mb-1">တကယ်ရလိုက်သော စုစုပေါင်းငွေ</div>
                             <div className="text-2xl font-black text-blue-800">
@@ -280,7 +280,7 @@ export default function App() {
                                                     className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all shadow-sm"
                                                 >
                                                     <option value="other">အခြားသူ</option>
-                                                    <option value="self">မိမိယူမည်</option>
+                                                    <option value="self">မိမိယူလိုက်သည်</option>
                                                 </select>
                                             )}
                                         </div>
