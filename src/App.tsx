@@ -154,42 +154,58 @@ const groups = [
     }
 ];
 
+// ရက်စွဲကို ပြောင်းလဲပေးသော Function
+const parseDate = (dStr: string) => {
+    const parts = dStr.split('.');
+    if (parts.length === 3) {
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2];
+        return new Date(`20${y}-${m}-${d}T00:00:00`);
+    }
+    return new Date();
+};
+
 export default function App() {
+    const [viewMode, setViewMode] = useState<'dashboard' | 'group'>('dashboard');
     const [selectedGroupId, setSelectedGroupId] = useState(groups[0].id);
 
-    const [actualPaid, setActualPaid] = useState<Record<number, number>>({});
-    const [whoTakes, setWhoTakes] = useState<Record<number, string>>({});
+    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန် (Dashboard တွင် တွက်ချက်ရန်)
+    const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
+    const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // လက်ရှိရွေးချယ်ထားသော အဖွဲ့၏ Data များ
     const currentGroup = groups.find(g => g.id === selectedGroupId) || groups[0];
     const { totalPot, basePerPerson, totalMembers, data: auctionData } = currentGroup;
+    const currentActualPaid = allActualPaid[selectedGroupId] || {};
+    const currentWhoTakes = allWhoTakes[selectedGroupId] || {};
 
+    // App စဖွင့်ချိန်တွင် အဖွဲ့ (၆) ဖွဲ့လုံး၏ Data ကို တပြိုင်နက်တည်း ဆွဲယူခြင်း
     useEffect(() => {
         setIsLoaded(false);
-        const docRef = doc(db, "auctionData", selectedGroupId);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setActualPaid(data.actualPaid || {});
-                setWhoTakes(data.whoTakes || {});
-            } else {
-                setActualPaid({});
-                setWhoTakes({});
-            }
-            setIsLoaded(true);
-        }, (error) => {
-            console.error("Firebase ဖတ်ရာတွင် အမှားဖြစ်နေပါသည်:", error);
-            setIsLoaded(true);
+        const unsubscribes = groups.map(g => {
+            return onSnapshot(doc(db, "auctionData", g.id), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setAllActualPaid(prev => ({...prev, [g.id]: data.actualPaid || {}}));
+                    setAllWhoTakes(prev => ({...prev, [g.id]: data.whoTakes || {}}));
+                } else {
+                    setAllActualPaid(prev => ({...prev, [g.id]: {}}));
+                    setAllWhoTakes(prev => ({...prev, [g.id]: {}}));
+                }
+            });
         });
+        
+        setTimeout(() => setIsLoaded(true), 800);
+        return () => unsubscribes.forEach(unsub => unsub());
+    }, []);
 
-        return () => unsubscribe();
-    }, [selectedGroupId]);
-
-    const saveToFirebase = async (newActualPaid: Record<number, number>, newWhoTakes: Record<number, string>) => {
+    const saveToFirebase = async (groupId: string, newActualPaid: Record<number, number>, newWhoTakes: Record<number, string>) => {
         setIsSaving(true);
         try {
-            await setDoc(doc(db, "auctionData", selectedGroupId), {
+            await setDoc(doc(db, "auctionData", groupId), {
                 actualPaid: newActualPaid,
                 whoTakes: newWhoTakes,
                 lastUpdated: new Date().toISOString()
@@ -201,58 +217,61 @@ export default function App() {
     };
 
     const handleActualPaidChange = (index: number, value: string) => {
-        const newPaid = {
-            ...actualPaid,
-            [index]: parseInt(value) || 0
-        };
-        setActualPaid(newPaid);
+        const val = parseInt(value) || 0;
+        setAllActualPaid(prev => ({
+            ...prev,
+            [selectedGroupId]: { ...(prev[selectedGroupId] || {}), [index]: val }
+        }));
     };
 
     const handleWhoChange = (index: number, value: string) => {
-        const newWhoTakes = {
-            ...whoTakes,
-            [index]: value
-        };
-        setWhoTakes(newWhoTakes);
-        saveToFirebase(actualPaid, newWhoTakes);
+        const newWhoTakes = { ...currentWhoTakes, [index]: value };
+        setAllWhoTakes(prev => ({
+            ...prev,
+            [selectedGroupId]: newWhoTakes
+        }));
+        saveToFirebase(selectedGroupId, currentActualPaid, newWhoTakes);
     };
 
     const calculateRowData = (index: number) => {
         const row = auctionData[index];
-        const currentPaid = actualPaid[index] || 0;
-        const isSelf = whoTakes[index] === 'self' && row.n !== 1;
+        const paid = currentActualPaid[index] || 0;
+        const isSelf = currentWhoTakes[index] === 'self' && row.n !== 1;
         
         let receivedAmount = '-';
         let profitAmount = '-';
         let lossAmount = '-';
 
-        if (currentPaid > 0) {
-            const totalAmountTaken = currentPaid * totalMembers;
-            const othersProfit = basePerPerson - currentPaid;
+        if (paid > 0) {
+            const totalAmountTaken = paid * totalMembers;
+            const othersProfit = basePerPerson - paid;
             const winnerLoss = totalPot - totalAmountTaken;
 
             receivedAmount = totalAmountTaken.toLocaleString();
             profitAmount = othersProfit > 0 ? othersProfit.toLocaleString() : '0';
             lossAmount = winnerLoss > 0 ? winnerLoss.toLocaleString() : '0';
         }
-        return { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount };
+        return { currentPaid: paid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
+    // ==========================================
+    // Group Dashboard တွက်ချက်မှုများ
+    // ==========================================
     let totalReceived = 0;
     let totalGrossLoss = 0;
     let totalOtherProfit = 0;
     const selfTurns: number[] = [];
 
     auctionData.forEach((row, index) => {
-        const currentPaid = actualPaid[index] || 0;
-        if (currentPaid > 0) {
-            if (whoTakes[index] === 'self' && row.n !== 1) {
+        const paid = currentActualPaid[index] || 0;
+        if (paid > 0) {
+            if (currentWhoTakes[index] === 'self' && row.n !== 1) {
                 selfTurns.push(row.n);
-                const received = currentPaid * totalMembers;
+                const received = paid * totalMembers;
                 totalReceived += received;
                 totalGrossLoss += (totalPot - received);
             } else if (row.n !== 1) {
-                const profit = basePerPerson - currentPaid;
+                const profit = basePerPerson - paid;
                 totalOtherProfit += profit;
             }
         }
@@ -261,6 +280,39 @@ export default function App() {
     const netAmount = totalOtherProfit - totalGrossLoss;
     const isNetProfit = netAmount > 0;
     const isNetLoss = netAmount < 0;
+
+    // ==========================================
+    // All Groups Timeline Dashboard တွက်ချက်မှုများ
+    // ==========================================
+    let timeline: Record<string, any[]> = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(today);
+    checkDate.setDate(today.getDate() - 3); // လွန်ခဲ့သော ၃ ရက်မှစ၍ ပြသမည်
+
+    groups.forEach(g => {
+        g.data.forEach((row, index) => {
+            const dateObj = parseDate(row.date);
+            if (dateObj >= checkDate) {
+                const timeKey = dateObj.getTime().toString();
+                if (!timeline[timeKey]) timeline[timeKey] = [];
+                
+                const paidAmt = allActualPaid[g.id]?.[index] || 0;
+                const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
+
+                timeline[timeKey].push({
+                    groupId: g.id,
+                    groupName: g.name,
+                    turn: row.n,
+                    dateStr: row.date,
+                    paidAmt: paidAmt,
+                    isSelf: isSelf
+                });
+            }
+        });
+    });
+
+    const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 20); // အနီးစပ်ဆုံး ရက် ၂၀ သာပြမည်
 
     return (
         <div className="bg-stone-50 min-h-screen font-sans pb-20 selection:bg-emerald-200">
@@ -279,41 +331,20 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* Group Selector */}
-                <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-10 pb-6 border-b border-gray-200">
-                    {groups.map(group => (
-                        <button
-                            key={group.id}
-                            onClick={() => setSelectedGroupId(group.id)}
-                            className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all duration-300 ${
-                                selectedGroupId === group.id 
-                                ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md shadow-[#cfad5e]/40 ring-2 ring-[#0b3c1a] ring-offset-2' 
-                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 hover:border-gray-400 shadow-sm'
-                            }`}
-                        >
-                            {group.name}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex flex-col items-center justify-center mb-8 relative">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-[#0b3c1a] drop-shadow-sm text-center leading-relaxed">
-                        {currentGroup.name}
-                    </h1>
-                    
-                    <div className="h-6 mt-3">
-                        {isSaving ? (
-                            <span className="text-sm font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-4 py-1.5 rounded-full animate-pulse shadow-sm flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                သိမ်းဆည်းနေပါသည်...
-                            </span>
-                        ) : (
-                            <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-2">
-                                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                ဒေတာများ သိမ်းဆည်းပြီးပါပြီ
-                            </span>
-                        )}
-                    </div>
+                {/* View Switcher Tabs */}
+                <div className="flex bg-white rounded-full shadow-sm border border-gray-200 p-1.5 mb-10 max-w-md mx-auto">
+                    <button
+                        onClick={() => setViewMode('dashboard')}
+                        className={`flex-1 py-2.5 rounded-full font-bold text-sm transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        📅 ပေါင်းချုပ် Dashboard
+                    </button>
+                    <button
+                        onClick={() => setViewMode('group')}
+                        className={`flex-1 py-2.5 rounded-full font-bold text-sm transition-all duration-300 ${viewMode === 'group' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        📝 အဖွဲ့အလိုက် စာရင်း
+                    </button>
                 </div>
 
                 {!isLoaded ? (
@@ -321,9 +352,126 @@ export default function App() {
                         <svg className="animate-spin h-8 w-8 text-[#cfad5e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         <span className="font-bold text-lg">အချက်အလက်များကို ဆွဲယူနေပါသည်...</span>
                     </div>
+                ) : viewMode === 'dashboard' ? (
+                    
+                    /* ==========================================
+                       ပေါင်းချုပ် Dashboard View 
+                    ========================================== */
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        <div className="mb-6 border-l-4 border-[#0b3c1a] pl-4">
+                            <h2 className="text-2xl font-black text-gray-800">လာမည့် အလှည့်များ (Upcoming)</h2>
+                            <p className="text-gray-500 text-sm mt-1">အဖွဲ့ပေါင်းစုံ၏ ထည့်ရမည့်ရက်များကို တစ်စုတစ်စည်းတည်း ကြည့်ရှုနိုင်ပါသည်။</p>
+                        </div>
+
+                        {sortedTimeKeys.map(timeKey => {
+                            const events = timeline[timeKey];
+                            const dateObj = new Date(parseInt(timeKey));
+                            const isToday = dateObj.getTime() === today.getTime();
+                            const isPast = dateObj.getTime() < today.getTime();
+                            
+                            let dailyTotal = 0;
+                            let pendingCount = 0;
+                            let isReceiving = false;
+
+                            events.forEach(e => {
+                                if (e.isSelf) {
+                                    isReceiving = true;
+                                } else {
+                                    if (e.paidAmt > 0) dailyTotal += e.paidAmt;
+                                    else pendingCount += 1;
+                                }
+                            });
+
+                            return (
+                                <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${isToday ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' : isPast ? 'bg-gray-50/50 border-gray-200 opacity-70' : 'bg-white border-gray-200'}`}>
+                                    <div className={`p-4 border-b flex justify-between items-center ${isToday ? 'bg-[#cfad5e]/20 border-[#cfad5e]/30' : 'bg-gray-50 border-gray-100'}`}>
+                                        <h3 className={`font-black text-lg ${isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
+                                            📅 {events[0].dateStr} {isToday && <span className="ml-2 text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
+                                        </h3>
+                                        <div className="text-sm font-bold text-gray-500">{events.length} ဖွဲ့</div>
+                                    </div>
+                                    
+                                    <div className="p-4 space-y-3">
+                                        {events.map((ev, i) => (
+                                            <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 p-3.5 rounded-lg border border-gray-100 gap-3">
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-[#0b3c1a] text-[15px]">{ev.groupName}</div>
+                                                    <div className="text-sm text-gray-500 font-medium mt-0.5">အလှည့် {ev.turn}</div>
+                                                </div>
+                                                <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
+                                                    <button 
+                                                        onClick={() => { setSelectedGroupId(ev.groupId); setViewMode('group'); }}
+                                                        className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors md:mb-1"
+                                                    >
+                                                        အဖွဲ့သို့သွားရန် →
+                                                    </button>
+                                                    {ev.isSelf ? (
+                                                        <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded">မိမိယူမည့်ရက် 🎉</span>
+                                                    ) : ev.paidAmt > 0 ? (
+                                                        <span className="font-black text-blue-700 text-base">{ev.paidAmt.toLocaleString()} ကျပ်</span>
+                                                    ) : (
+                                                        <span className="text-sm font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded">လေလံမဆွဲရသေးပါ</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div className="bg-[#cfad5e]/10 p-4 border-t border-[#cfad5e]/30 flex flex-col md:flex-row justify-between items-center gap-2">
+                                        <span className="font-bold text-[#0b3c1a]">စုစုပေါင်း ထည့်ရမည့်ငွေ :</span>
+                                        <div className="text-right flex flex-col items-center md:items-end">
+                                            <span className="font-black text-2xl text-[#0b3c1a]">{dailyTotal.toLocaleString()} ကျပ်</span>
+                                            {pendingCount > 0 && <div className="text-xs text-rose-600 font-bold mt-1">+ လေလံမဆွဲရသေးသော {pendingCount} ဖွဲ့ ကျန်သေးသည်</div>}
+                                            {isReceiving && <div className="text-[13px] text-emerald-600 font-black mt-1.5 bg-emerald-100 px-3 py-1 rounded-full shadow-sm">🎉 ယနေ့ မိမိငွေယူမည့်ရက်ဖြစ်ပါသည်</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
                 ) : (
+
+                    /* ==========================================
+                       အဖွဲ့အလိုက် Group Detail View 
+                    ========================================== */
                     <>
-                        {/* Dashboard */}
+                        <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-10 pb-6 border-b border-gray-200">
+                            {groups.map(group => (
+                                <button
+                                    key={group.id}
+                                    onClick={() => setSelectedGroupId(group.id)}
+                                    className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all duration-300 ${
+                                        selectedGroupId === group.id 
+                                        ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md shadow-[#cfad5e]/40 ring-2 ring-[#0b3c1a] ring-offset-2' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 hover:border-gray-400 shadow-sm'
+                                    }`}
+                                >
+                                    {group.name}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center mb-8 relative">
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-[#0b3c1a] drop-shadow-sm text-center leading-relaxed">
+                                {currentGroup.name}
+                            </h1>
+                            <div className="h-6 mt-3">
+                                {isSaving ? (
+                                    <span className="text-sm font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-4 py-1.5 rounded-full animate-pulse shadow-sm flex items-center gap-2">
+                                        <svg className="animate-spin h-4 w-4 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        သိမ်းဆည်းနေပါသည်...
+                                    </span>
+                                ) : (
+                                    <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        ဒေတာများ သိမ်းဆည်းပြီးပါပြီ
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Group Dashboard */}
                         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 md:p-7 mb-10 overflow-hidden relative">
                             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#0b3c1a] via-[#cfad5e] to-[#0b3c1a]"></div>
                             <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 pb-3 border-b border-gray-100 flex items-center gap-2">
@@ -405,7 +553,7 @@ export default function App() {
                                                             placeholder="0"
                                                         />
                                                         <button 
-                                                            onClick={() => saveToFirebase(actualPaid, whoTakes)}
+                                                            onClick={() => saveToFirebase(selectedGroupId, currentActualPaid, currentWhoTakes)}
                                                             className="bg-[#0b3c1a] hover:bg-[#0b3c1a]/90 text-[#cfad5e] px-3 rounded-xl shadow-md transition-colors flex items-center justify-center active:scale-95"
                                                             title="သိမ်းမည်"
                                                         >
@@ -423,7 +571,7 @@ export default function App() {
                                                         </div>
                                                     ) : (
                                                         <select 
-                                                            value={whoTakes[index] || 'other'}
+                                                            value={currentWhoTakes[index] || 'other'}
                                                             onChange={(e) => handleWhoChange(index, e.target.value)}
                                                             className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#cfad5e] focus:border-[#cfad5e] outline-none bg-white transition-all shadow-sm font-semibold text-gray-700 appearance-none cursor-pointer"
                                                         >
@@ -459,3 +607,4 @@ export default function App() {
         </div>
     );
 }
+```eof
