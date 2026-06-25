@@ -292,6 +292,9 @@ export default function App() {
                 
                 const paidAmt = allActualPaid[g.id]?.[index] || 0;
                 const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
+                
+                // လေလံမဆွဲရသေးပါက ကြမ်းခင်းစျေးဖြင့် ခန့်မှန်းတွက်ချက်ရန်
+                const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
                     groupId: g.id,
@@ -299,6 +302,7 @@ export default function App() {
                     turn: row.n,
                     dateStr: row.date,
                     paidAmt: paidAmt,
+                    expectedAmt: expectedAmt,
                     isSelf: isSelf
                 });
             }
@@ -367,8 +371,8 @@ export default function App() {
                                 if (e.isSelf) {
                                     isReceiving = true;
                                 } else {
-                                    if (e.paidAmt > 0) dailyTotal += e.paidAmt;
-                                    else pendingCount += 1;
+                                    dailyTotal += e.expectedAmt;
+                                    if (e.paidAmt === 0) pendingCount += 1;
                                 }
                             });
 
@@ -400,7 +404,10 @@ export default function App() {
                                                     ) : ev.paidAmt > 0 ? (
                                                         <span className="font-black text-blue-700 text-base">{ev.paidAmt.toLocaleString()} ကျပ်</span>
                                                     ) : (
-                                                        <span className="text-sm font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded">လေလံမဆွဲရသေးပါ</span>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="font-black text-amber-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                            <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">ခန့်မှန်း (ကြမ်းခင်းစျေး)</span>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
@@ -411,7 +418,7 @@ export default function App() {
                                         <span className="font-bold text-[#0b3c1a]">စုစုပေါင်း ထည့်ရမည့်ငွေ :</span>
                                         <div className="text-right flex flex-col items-center md:items-end">
                                             <span className="font-black text-2xl text-[#0b3c1a]">{dailyTotal.toLocaleString()} ကျပ်</span>
-                                            {pendingCount > 0 && <div className="text-xs text-rose-600 font-bold mt-1">+ လေလံမဆွဲရသေးသော {pendingCount} ဖွဲ့ ကျန်သေးသည်</div>}
+                                            {pendingCount > 0 && <div className="text-xs text-amber-600 font-bold mt-1">+ အဖွဲ့ ({pendingCount}) ဖွဲ့အတွက် ခန့်မှန်းတွက်ချက်ထားပါသည်</div>}
                                             {isReceiving && <div className="text-[13px] text-emerald-600 font-black mt-1.5 bg-emerald-100 px-3 py-1 rounded-full shadow-sm">🎉 ယနေ့ မိမိငွေယူမည့်ရက်ဖြစ်ပါသည်</div>}
                                         </div>
                                     </div>
