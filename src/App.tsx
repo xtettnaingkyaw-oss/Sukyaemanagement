@@ -155,7 +155,7 @@ export default function App() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col items-center justify-center mb-6 relative">
                     <h1 className="text-2xl md:text-3xl font-bold text-blue-900 drop-shadow-sm text-center">
-                        စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်
+                        သိန်း(၁၅၀)စု၊ လူ(၃၀)၊ ၅ ရက်တစ်ခါမဲ
                     </h1>
                     
                     <div className="h-6 mt-2">
