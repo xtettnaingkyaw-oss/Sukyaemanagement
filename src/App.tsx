@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const auctionData = [
     {n: 1, date: "25.1.26", price: 15000000}, {n: 2, date: "30.1.26", price: 11000000},
@@ -19,16 +19,45 @@ const auctionData = [
 ];
 
 export default function App() {
-    // State များကို TypeScript Record Type ဖြင့် သိမ်းဆည်းရန်
     const [actualPaid, setActualPaid] = useState<Record<number, number>>({});
     const [whoTakes, setWhoTakes] = useState<Record<number, string>>({});
 
-    // ပုံသေ အချက်အလက်များ
+    // Scroll bar အပေါ်ပို့ရန် လိုအပ်သော Refs နှင့် State
+    const topScrollContainerRef = useRef<HTMLDivElement>(null);
+    const tableScrollContainerRef = useRef<HTMLDivElement>(null);
+    const tableRef = useRef<HTMLTableElement>(null);
+    const [tableWidth, setTableWidth] = useState(1200);
+
     const basePerPerson = 500000; 
     const totalPot = 15000000;
     const totalMembers = 30;
 
-    // အမှန်တကယ်ထည့်ရမည့်ငွေ အပြောင်းအလဲဖြစ်သည့်အခါ
+    // ဇယားအကျယ်အဝန်းကို အတိအကျ တွက်ချက်ခြင်း
+    useEffect(() => {
+        const updateWidth = () => {
+            if (tableRef.current) {
+                setTableWidth(tableRef.current.scrollWidth);
+            }
+        };
+        setTimeout(updateWidth, 100); 
+        window.addEventListener('resize', updateWidth);
+        return () => window.removeEventListener('resize', updateWidth);
+    }, [actualPaid, whoTakes]);
+
+    // အပေါ် Scroll bar ဆွဲလျှင် အောက်ဇယားပါ လိုက်ရွေ့ရန်
+    const handleTopScroll = () => {
+        if (tableScrollContainerRef.current && topScrollContainerRef.current) {
+            tableScrollContainerRef.current.scrollLeft = topScrollContainerRef.current.scrollLeft;
+        }
+    };
+
+    // အောက်ဇယားကို လက်ဖြင့်ဆွဲလျှင် အပေါ် Scroll bar ပါ လိုက်ရွေ့ရန်
+    const handleTableScroll = () => {
+        if (tableScrollContainerRef.current && topScrollContainerRef.current) {
+            topScrollContainerRef.current.scrollLeft = tableScrollContainerRef.current.scrollLeft;
+        }
+    };
+
     const handleActualPaidChange = (index: number, value: string) => {
         setActualPaid(prev => ({
             ...prev,
@@ -36,7 +65,6 @@ export default function App() {
         }));
     };
 
-    // မိမိ/အခြားသူ ရွေးချယ်မှု အပြောင်းအလဲဖြစ်သည့်အခါ
     const handleWhoChange = (index: number, value: string) => {
         setWhoTakes(prev => ({
             ...prev,
@@ -46,23 +74,56 @@ export default function App() {
 
     return (
         <div className="bg-gray-100 min-h-screen p-2 md:p-6">
+            {/* Scroll bar ဒီဇိုင်းများ */}
+            <style>{`
+                .top-scrollbar::-webkit-scrollbar {
+                    height: 14px;
+                }
+                .top-scrollbar::-webkit-scrollbar-track {
+                    background: #f3f4f6; 
+                    border-radius: 10px;
+                    border: 1px solid #e5e7eb;
+                }
+                .top-scrollbar::-webkit-scrollbar-thumb {
+                    background: #60a5fa; 
+                    border-radius: 10px;
+                    border: 2px solid #f3f4f6;
+                }
+                .top-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #3b82f6; 
+                }
+                
+                /* အောက်ဘက် Scroll bar ကို ဖျောက်ထားရန် */
+                .hide-bottom-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .hide-bottom-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
+
             <div className="max-w-7xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow-lg">
                 <h1 className="text-xl md:text-2xl font-bold mb-6 text-center text-blue-900">စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်</h1>
 
-                {/* Scrollbar ကို အပေါ်ပို့ရန်နှင့် ဆွဲရလွယ်အောင် CSS ဖြင့် ပြင်ဆင်ထားခြင်း */}
+                {/* အပေါ်ဘက်တွင် သီးသန့်ပြသမည့် Scroll Bar */}
                 <div 
-                    className="overflow-x-auto pb-3 mb-4
-                    [&::-webkit-scrollbar]:h-3.5
-                    [&::-webkit-scrollbar-track]:bg-gray-200 
-                    [&::-webkit-scrollbar-track]:rounded-full
-                    [&::-webkit-scrollbar-thumb]:bg-blue-400 
-                    [&::-webkit-scrollbar-thumb]:rounded-full
-                    hover:[&::-webkit-scrollbar-thumb]:bg-blue-600"
-                    style={{ transform: 'rotateX(180deg)' }}
+                    ref={topScrollContainerRef}
+                    onScroll={handleTopScroll}
+                    className="overflow-x-auto top-scrollbar mb-2"
+                >
+                    <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
+                </div>
+
+                {/* မူလ ဇယားအကွက် (Scroll bar ဖျောက်ထားသည်) */}
+                <div 
+                    ref={tableScrollContainerRef}
+                    onScroll={handleTableScroll}
+                    className="overflow-x-auto hide-bottom-scrollbar pb-4"
                 >
                     <table 
-                        className="w-full text-sm text-left border-collapse border border-gray-300 min-w-[1000px]"
-                        style={{ transform: 'rotateX(180deg)' }}
+                        ref={tableRef}
+                        className="w-full text-sm text-left border-collapse border border-gray-300 min-w-[1100px]"
                     >
                         <thead>
                             <tr className="bg-gray-200">
