@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 
 const auctionData = [
     {n: 1, date: "25.1.26", price: 15000000}, {n: 2, date: "30.1.26", price: 11000000},
@@ -22,41 +22,9 @@ export default function App() {
     const [actualPaid, setActualPaid] = useState<Record<number, number>>({});
     const [whoTakes, setWhoTakes] = useState<Record<number, string>>({});
 
-    // Scroll bar အပေါ်ပို့ရန် လိုအပ်သော Refs နှင့် State
-    const topScrollContainerRef = useRef<HTMLDivElement>(null);
-    const tableScrollContainerRef = useRef<HTMLDivElement>(null);
-    const tableRef = useRef<HTMLTableElement>(null);
-    const [tableWidth, setTableWidth] = useState(1200);
-
     const basePerPerson = 500000; 
     const totalPot = 15000000;
     const totalMembers = 30;
-
-    // ဇယားအကျယ်အဝန်းကို အတိအကျ တွက်ချက်ခြင်း
-    useEffect(() => {
-        const updateWidth = () => {
-            if (tableRef.current) {
-                setTableWidth(tableRef.current.scrollWidth);
-            }
-        };
-        setTimeout(updateWidth, 100); 
-        window.addEventListener('resize', updateWidth);
-        return () => window.removeEventListener('resize', updateWidth);
-    }, [actualPaid, whoTakes]);
-
-    // အပေါ် Scroll bar ဆွဲလျှင် အောက်ဇယားပါ လိုက်ရွေ့ရန်
-    const handleTopScroll = () => {
-        if (tableScrollContainerRef.current && topScrollContainerRef.current) {
-            tableScrollContainerRef.current.scrollLeft = topScrollContainerRef.current.scrollLeft;
-        }
-    };
-
-    // အောက်ဇယားကို လက်ဖြင့်ဆွဲလျှင် အပေါ် Scroll bar ပါ လိုက်ရွေ့ရန်
-    const handleTableScroll = () => {
-        if (tableScrollContainerRef.current && topScrollContainerRef.current) {
-            topScrollContainerRef.current.scrollLeft = tableScrollContainerRef.current.scrollLeft;
-        }
-    };
 
     const handleActualPaidChange = (index: number, value: string) => {
         setActualPaid(prev => ({
@@ -72,123 +40,153 @@ export default function App() {
         }));
     };
 
+    // တွက်ချက်မှုများကို သီးသန့်ထုတ်ထားခြင်း (ကတ်ပုံစံရော၊ ဇယားပုံစံပါ သုံးနိုင်ရန်)
+    const calculateRowData = (index: number) => {
+        const currentPaid = actualPaid[index] || 0;
+        const isSelf = whoTakes[index] === 'self';
+        
+        let receivedAmount = '-';
+        let profitAmount = '-';
+        let lossAmount = '-';
+
+        if (currentPaid > 0) {
+            const totalAmountTaken = currentPaid * totalMembers;
+            const othersProfit = basePerPerson - currentPaid;
+            const winnerLoss = totalPot - totalAmountTaken;
+
+            receivedAmount = totalAmountTaken.toLocaleString();
+            profitAmount = othersProfit > 0 ? othersProfit.toLocaleString() : '0';
+            lossAmount = winnerLoss > 0 ? winnerLoss.toLocaleString() : '0';
+        }
+        return { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount };
+    };
+
     return (
-        <div className="bg-gray-100 min-h-screen p-2 md:p-6">
-            {/* Scroll bar ဒီဇိုင်းများ */}
-            <style>{`
-                .top-scrollbar::-webkit-scrollbar {
-                    height: 14px;
-                }
-                .top-scrollbar::-webkit-scrollbar-track {
-                    background: #f3f4f6; 
-                    border-radius: 10px;
-                    border: 1px solid #e5e7eb;
-                }
-                .top-scrollbar::-webkit-scrollbar-thumb {
-                    background: #60a5fa; 
-                    border-radius: 10px;
-                    border: 2px solid #f3f4f6;
-                }
-                .top-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: #3b82f6; 
-                }
-                
-                /* အောက်ဘက် Scroll bar ကို ဖျောက်ထားရန် */
-                .hide-bottom-scrollbar::-webkit-scrollbar {
-                    display: none;
-                }
-                .hide-bottom-scrollbar {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
-                }
-            `}</style>
+        <div className="bg-gray-50 min-h-screen p-3 md:p-6 font-sans">
+            <div className="max-w-7xl mx-auto">
+                <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-blue-900 drop-shadow-sm">
+                    စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်
+                </h1>
 
-            <div className="max-w-7xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow-lg">
-                <h1 className="text-xl md:text-2xl font-bold mb-6 text-center text-blue-900">စုကြေးလေလံဆွဲ တွက်ချက်ရေးစနစ်</h1>
+                {/* ဖုန်းများအတွက် Card ဒီဇိုင်း (စခရင်အသေးတွင်သာ ပေါ်မည်) */}
+                <div className="block lg:hidden space-y-4">
+                    {auctionData.map((row, index) => {
+                        const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
+                        
+                        return (
+                            <div key={index} className={`rounded-xl shadow-md border p-4 transition-all ${isSelf ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
+                                {/* Card Header */}
+                                <div className="flex justify-between items-center border-b pb-3 mb-3">
+                                    <span className="font-bold text-lg text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
+                                        အလှည့် {row.n}
+                                    </span>
+                                    <span className="text-gray-600 font-semibold">{row.date}</span>
+                                </div>
+                                
+                                {/* Card Body */}
+                                <div className="space-y-3 text-sm">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500">ကြမ်းခင်းစျေး:</span>
+                                        <span className="font-bold text-base">{row.price.toLocaleString()}</span>
+                                    </div>
 
-                {/* အပေါ်ဘက်တွင် သီးသန့်ပြသမည့် Scroll Bar */}
-                <div 
-                    ref={topScrollContainerRef}
-                    onScroll={handleTopScroll}
-                    className="overflow-x-auto top-scrollbar mb-2"
-                >
-                    <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
+                                    <div className="grid grid-cols-2 gap-3 pt-2">
+                                        <div>
+                                            <label className="block text-gray-500 text-xs mb-1 font-medium">ထည့်ရမည့်ငွေ</label>
+                                            <input 
+                                                type="number" 
+                                                value={currentPaid || ''}
+                                                onChange={(e) => handleActualPaidChange(index, e.target.value)}
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                                                placeholder="ဥပမာ- ၃၅၀၀၀၀"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-500 text-xs mb-1 font-medium">ယူမည့်သူ</label>
+                                            <select 
+                                                value={whoTakes[index] || 'other'}
+                                                onChange={(e) => handleWhoChange(index, e.target.value)}
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                                            >
+                                                <option value="other">အခြားသူ</option>
+                                                <option value="self">မိမိယူမည်</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-gray-50 rounded-lg p-3 mt-3 space-y-2 border">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-500">ရရှိသွားသောငွေ:</span>
+                                            <span className="font-bold text-blue-700 text-base">{receivedAmount}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-500">ကျန်သူများမြတ်ငွေ:</span>
+                                            <span className="font-bold text-green-600 text-base">{profitAmount}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-500">ယူသူရှုံးငွေ (၁၅၀အပေါ်):</span>
+                                            <span className="font-bold text-red-600 text-base">{lossAmount}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
-                {/* မူလ ဇယားအကွက် (Scroll bar ဖျောက်ထားသည်) */}
-                <div 
-                    ref={tableScrollContainerRef}
-                    onScroll={handleTableScroll}
-                    className="overflow-x-auto hide-bottom-scrollbar pb-4"
-                >
-                    <table 
-                        ref={tableRef}
-                        className="w-full text-sm text-left border-collapse border border-gray-300 min-w-[1100px]"
-                    >
+                {/* ကွန်ပျူတာ / Tablet များအတွက် မူလဇယားဒီဇိုင်း (စခရင်အကြီးတွင်သာ ပေါ်မည်) */}
+                <div className="hidden lg:block overflow-x-auto bg-white rounded-xl shadow-lg border border-gray-200">
+                    <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                         <thead>
-                            <tr className="bg-gray-200">
-                                <th className="p-2 border text-center whitespace-nowrap">No</th>
-                                <th className="p-2 border whitespace-nowrap">စုကြေးထည့်ရမည့်ရက်</th>
-                                <th className="p-2 border text-right whitespace-nowrap">ကြမ်းခင်းစျေး</th>
-                                <th className="p-2 border min-w-[150px]">တစ်ဦးလျှင်အမှန်တကယ်<br/>ထည့်ရမည့်ပမာဏ</th>
-                                <th className="p-2 border text-right min-w-[150px]">မဲရသူ အမှန်တကယ်<br/>ရရှိသွားသောပမာဏ</th>
-                                <th className="p-2 border min-w-[120px]">မိမိယူ(သို့)<br/>အခြားသူယူ</th>
-                                <th className="p-2 border text-right min-w-[180px]">မဲယူသွားသည့်သူအပေါ်တွင်<br/>ကျန်သူများကမြတ်သွားသည့်ပမာဏ</th>
-                                <th className="p-2 border text-right min-w-[180px]">စုကြေး သိန်း ၁၅၀ အပေါ်တွင်<br/>မဲယူလိုက်သည့်သူက ရှုံးသွားသည့်ပမာဏ</th>
+                            <tr className="bg-blue-900 text-white">
+                                <th className="p-3 border-b text-center whitespace-nowrap">No</th>
+                                <th className="p-3 border-b whitespace-nowrap">ရက်စွဲ</th>
+                                <th className="p-3 border-b text-right whitespace-nowrap">ကြမ်းခင်းစျေး</th>
+                                <th className="p-3 border-b min-w-[150px]">ထည့်ရမည့်ပမာဏ</th>
+                                <th className="p-3 border-b min-w-[120px]">ယူမည့်သူ</th>
+                                <th className="p-3 border-b text-right min-w-[150px]">မဲရသူ ရရှိသောငွေ</th>
+                                <th className="p-3 border-b text-right min-w-[180px]">ကျန်သူများ မြတ်ငွေ</th>
+                                <th className="p-3 border-b text-right min-w-[180px]">ယူသူ ရှုံးငွေ</th>
                             </tr>
                         </thead>
                         <tbody>
                             {auctionData.map((row, index) => {
-                                const currentPaid = actualPaid[index] || 0;
-                                const isSelf = whoTakes[index] === 'self';
-                                
-                                let receivedAmount = '-';
-                                let profitAmount = '-';
-                                let lossAmount = '-';
-
-                                if (currentPaid > 0) {
-                                    const totalAmountTaken = currentPaid * totalMembers;
-                                    const othersProfit = basePerPerson - currentPaid;
-                                    const winnerLoss = totalPot - totalAmountTaken;
-
-                                    receivedAmount = totalAmountTaken.toLocaleString();
-                                    profitAmount = othersProfit > 0 ? othersProfit.toLocaleString() : '0';
-                                    lossAmount = winnerLoss > 0 ? winnerLoss.toLocaleString() : '0';
-                                }
+                                const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
 
                                 return (
-                                    <tr key={index} className={`transition-colors ${isSelf ? 'bg-blue-100' : 'hover:bg-gray-50'}`}>
-                                        <td className="p-2 border text-center">{row.n}</td>
-                                        <td className="p-2 border whitespace-nowrap">{row.date}</td>
-                                        <td className="p-2 border text-right font-medium">{row.price.toLocaleString()}</td>
-                                        <td className="p-2 border">
+                                    <tr key={index} className={`border-b transition-colors ${isSelf ? 'bg-blue-50' : 'hover:bg-gray-50 bg-white'}`}>
+                                        <td className="p-3 text-center font-semibold text-gray-700">{row.n}</td>
+                                        <td className="p-3 whitespace-nowrap text-gray-600">{row.date}</td>
+                                        <td className="p-3 text-right font-medium text-gray-800">{row.price.toLocaleString()}</td>
+                                        <td className="p-3">
                                             <input 
                                                 type="number" 
-                                                value={actualPaid[index] || ''}
+                                                value={currentPaid || ''}
                                                 onChange={(e) => handleActualPaidChange(index, e.target.value)}
-                                                className="w-full p-1.5 border rounded border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
+                                                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" 
                                                 placeholder="0"
                                             />
                                         </td>
-                                        <td className="p-2 border text-right font-bold text-blue-600">{receivedAmount}</td>
-                                        <td className="p-2 border">
+                                        <td className="p-3">
                                             <select 
                                                 value={whoTakes[index] || 'other'}
                                                 onChange={(e) => handleWhoChange(index, e.target.value)}
-                                                className="w-full p-1.5 border rounded border-gray-300 focus:outline-none focus:border-blue-500 bg-white"
+                                                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                                             >
-                                                <option value="other">အခြားသူယူ</option>
-                                                <option value="self">မိမိယူ</option>
+                                                <option value="other">အခြားသူ</option>
+                                                <option value="self">မိမိယူမည်</option>
                                             </select>
                                         </td>
-                                        <td className="p-2 border text-right text-green-600 font-bold">{profitAmount}</td>
-                                        <td className="p-2 border text-right text-red-600 font-bold">{lossAmount}</td>
+                                        <td className="p-3 text-right font-bold text-blue-700">{receivedAmount}</td>
+                                        <td className="p-3 text-right text-green-600 font-bold">{profitAmount}</td>
+                                        <td className="p-3 text-right text-red-600 font-bold">{lossAmount}</td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
                 </div>
+
             </div>
         </div>
     );
