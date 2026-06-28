@@ -183,6 +183,7 @@ export default function App() {
     const currentActualPaid = allActualPaid[selectedGroupId] || {};
     const currentWhoTakes = allWhoTakes[selectedGroupId] || {};
 
+    // React စဖွင့်ချိန်တွင် Tab Title ကို ပြောင်းပေးရန်
     useEffect(() => {
         document.title = "MibaAyate|SuKyae";
     }, []);
@@ -286,7 +287,36 @@ export default function App() {
         return { currentPaid: paid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
-    // လစဉ်အခြေအနေ Dashboard အတွက် တွက်ချက်မှုများ (This Month Summary)
+    // ==========================================
+    // အဖွဲ့အလိုက် Dashboard အတွက် တွက်ချက်မှုများ (MISSING BLOCK RESTORED)
+    // ==========================================
+    let totalReceived = 0;
+    let totalGrossLoss = 0;
+    let totalOtherProfit = 0;
+    const selfTurns: number[] = [];
+
+    auctionData.forEach((row, index) => {
+        const paid = currentActualPaid[index] || 0;
+        if (paid > 0) {
+            if (currentWhoTakes[index] === 'self' && row.n !== 1) {
+                selfTurns.push(row.n);
+                const received = paid * totalMembers;
+                totalReceived += received;
+                totalGrossLoss += (totalPot - received);
+            } else if (row.n !== 1) {
+                const profit = basePerPerson - paid;
+                totalOtherProfit += profit;
+            }
+        }
+    });
+
+    const netAmount = totalOtherProfit - totalGrossLoss;
+    const isNetProfit = netAmount > 0;
+    const isNetLoss = netAmount < 0;
+
+    // ==========================================
+    // လစဉ်အခြေအနေ Dashboard အတွက် တွက်ချက်မှုများ
+    // ==========================================
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentMonth = today.getMonth();
@@ -361,7 +391,9 @@ export default function App() {
         };
     });
 
+    // ==========================================
     // Upcoming Payments Dashboard အတွက် Timeline တွက်ချက်မှုများ
+    // ==========================================
     let timeline: Record<string, any[]> = {};
 
     for (let i = 0; i < 15; i++) {
@@ -450,7 +482,7 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs (ယခု (၄) ခု ဖြစ်သွားပါမည်) */}
+                {/* View Switcher Tabs */}
                 <div className="flex flex-wrap bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-3xl mx-auto gap-1">
                     <button
                         onClick={() => setViewMode('dashboard')}
@@ -487,7 +519,7 @@ export default function App() {
                 ) : viewMode === 'summary' ? (
                     
                     /* ==========================================
-                       လစဉ်/အခြေအနေ Dashboard View (အသစ်)
+                       လစဉ်/အခြေအနေ Dashboard View
                     ========================================== */
                     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
                         <div className="text-center mb-8">
@@ -786,6 +818,9 @@ export default function App() {
 
                 ) : (
 
+                    /* ==========================================
+                       အဖွဲ့အလိုက် Group Detail View
+                    ========================================== */
                     <>
                         <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-10 pb-6 border-b border-gray-200">
                             {groups.map(group => (
