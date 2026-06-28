@@ -154,6 +154,16 @@ const groups = [
     }
 ];
 
+// လစဉ် အတိုးပေးရမည့် စာရင်းများ
+const monthlyLoansData = [
+    { id: 'tm_1', creditor: 'ဆရာမ ဒေါ်တင်မာ', day: 2, amount: 150000 },
+    { id: 'tm_2', creditor: 'ဆရာမ ဒေါ်တင်မာ', day: 27, amount: 200000 },
+    { id: 'am_1', creditor: 'အန်တီမေ', day: 15, amount: 200000 },
+    { id: 'am_2', creditor: 'အန်တီမေ', day: 18, amount: 230000 },
+    { id: 'ks_1', creditor: 'ကိုစွမ်း', day: 5, amount: 525000 },
+    { id: 'ks_2', creditor: 'ကိုစွမ်း', day: 15, amount: 1000000 },
+].sort((a, b) => a.day - b.day);
+
 // ရက်စွဲကို ပြောင်းလဲပေးသော Function
 const parseDate = (dStr: string) => {
     const parts = dStr.split('.');
@@ -167,17 +177,27 @@ const parseDate = (dStr: string) => {
 };
 
 export default function App() {
-    // Tab (၄) ခုအတွက် View Mode ပြောင်းလဲခြင်း
-    const [viewMode, setViewMode] = useState<'dashboard' | 'summary' | 'group' | 'loan'>('dashboard');
+    // Tab (၅) ခုအတွက် View Mode ပြောင်းလဲခြင်း
+    const [viewMode, setViewMode] = useState<'dashboard' | 'summary' | 'group' | 'loan' | 'monthly_loan'>('dashboard');
     const [selectedGroupId, setSelectedGroupId] = useState(groups[0].id);
 
+    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန်
     const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
     const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
+    
+    // နေ့ပြန်တိုး Data များကို သိမ်းဆည်းထားရန်
     const [loanRepayments, setLoanRepayments] = useState<Record<number, boolean>>({});
+    
+    // လစဉ်အတိုး Data များကို သိမ်းဆည်းထားရန် (key format: "id_year_month")
+    const [monthlyLoanRepayments, setMonthlyLoanRepayments] = useState<Record<string, boolean>>({});
+
+    // လစဉ်အတိုး View တွင် ကြည့်ရှုမည့် လ/နှစ် ကို သတ်မှတ်ရန်
+    const [monthlyViewDate, setMonthlyViewDate] = useState(new Date());
 
     const [isSaving, setIsSaving] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // လက်ရှိရွေးချယ်ထားသော အဖွဲ့၏ Data များ
     const currentGroup = groups.find(g => g.id === selectedGroupId) || groups[0];
     const { totalPot, basePerPerson, totalMembers, data: auctionData } = currentGroup;
     const currentActualPaid = allActualPaid[selectedGroupId] || {};
@@ -203,6 +223,7 @@ export default function App() {
             });
         });
 
+        // နေ့ပြန်တိုး Data ဆွဲယူရန်
         const loanUnsub = onSnapshot(doc(db, "loanData", "daily_loan_1"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -211,11 +232,21 @@ export default function App() {
                 setLoanRepayments({ 1: true, 2: true, 3: true, 4: true });
             }
         });
+
+        // လစဉ်အတိုး Data ဆွဲယူရန်
+        const monthlyLoanUnsub = onSnapshot(doc(db, "loanData", "monthly_loans"), (docSnap) => {
+            if (docSnap.exists()) {
+                setMonthlyLoanRepayments(docSnap.data().repayments || {});
+            } else {
+                setMonthlyLoanRepayments({});
+            }
+        });
         
         setTimeout(() => setIsLoaded(true), 800);
         return () => {
             unsubscribes.forEach(unsub => unsub());
             loanUnsub();
+            monthlyLoanUnsub();
         };
     }, []);
 
@@ -266,6 +297,23 @@ export default function App() {
         setTimeout(() => setIsSaving(false), 800);
     };
 
+    const handleMonthlyLoanToggle = async (mlId: string, year: number, month: number) => {
+        const key = `${mlId}_${year}_${month}`;
+        const newRepayments = { ...monthlyLoanRepayments, [key]: !monthlyLoanRepayments[key] };
+        setMonthlyLoanRepayments(newRepayments);
+
+        setIsSaving(true);
+        try {
+            await setDoc(doc(db, "loanData", "monthly_loans"), {
+                repayments: newRepayments,
+                lastUpdated: new Date().toISOString()
+            }, { merge: true });
+        } catch (error) {
+            console.error("Firebase သို့ လစဉ်အတိုး သိမ်းဆည်းရာတွင် အမှားဖြစ်နေပါသည်:", error);
+        }
+        setTimeout(() => setIsSaving(false), 800);
+    };
+
     const calculateRowData = (index: number) => {
         const row = auctionData[index];
         const paid = currentActualPaid[index] || 0;
@@ -288,7 +336,7 @@ export default function App() {
     };
 
     // ==========================================
-    // အဖွဲ့အလိုက် Dashboard အတွက် တွက်ချက်မှုများ (MISSING BLOCK RESTORED)
+    // အဖွဲ့အလိုက် Dashboard အတွက် တွက်ချက်မှုများ
     // ==========================================
     let totalReceived = 0;
     let totalGrossLoss = 0;
@@ -326,6 +374,7 @@ export default function App() {
 
     let thisMonthSukyaePaid = 0;
     let thisMonthLoanPaid = 0;
+    let thisMonthMonthlyLoanPaid = 0;
 
     const loanPrincipal = 20000000; 
     const loanDailyPayment = 371450; 
@@ -351,6 +400,14 @@ export default function App() {
             if (loanRepayments[ld.day]) {
                 thisMonthLoanPaid += loanDailyPayment;
             }
+        }
+    });
+
+    // လစဉ်အတိုး ယခုလ ထည့်ပြီးငွေ တွက်ချက်ခြင်း
+    monthlyLoansData.forEach(ml => {
+        const key = `${ml.id}_${currentYear}_${currentMonth}`;
+        if (monthlyLoanRepayments[key]) {
+            thisMonthMonthlyLoanPaid += ml.amount;
         }
     });
 
@@ -402,10 +459,11 @@ export default function App() {
         timeline[futureDate.getTime().toString()] = [];
     }
 
+    // ၁။ စုကြေးထည့်ခြင်း
     groups.forEach(g => {
         g.data.forEach((row, index) => {
             const dateObj = parseDate(row.date);
-            if (dateObj >= today) {
+            if (dateObj >= today && dateObj.getTime() <= today.getTime() + (14 * 86400000)) {
                 const timeKey = dateObj.getTime().toString();
                 if (!timeline[timeKey]) timeline[timeKey] = [];
                 
@@ -414,7 +472,8 @@ export default function App() {
                 const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
-                    isLoan: false,
+                    isDailyLoan: false,
+                    isMonthlyLoan: false,
                     groupId: g.id,
                     groupName: g.name,
                     turn: row.n,
@@ -427,15 +486,17 @@ export default function App() {
         });
     });
 
+    // ၂။ နေ့ပြန်တိုးထည့်ခြင်း
     loanDates.forEach(ld => {
-        if (ld.dateObj >= today) {
+        if (ld.dateObj >= today && ld.dateObj.getTime() <= today.getTime() + (14 * 86400000)) {
             const timeKey = ld.dateObj.getTime().toString();
             if (!timeline[timeKey]) timeline[timeKey] = [];
             
             const isPaid = !!loanRepayments[ld.day];
             
             timeline[timeKey].push({
-                isLoan: true,
+                isDailyLoan: true,
+                isMonthlyLoan: false,
                 groupId: 'daily_loan',
                 groupName: '💸 နေ့ပြန်တိုး (သိန်း ၂၀၀)',
                 turn: ld.day,
@@ -446,6 +507,36 @@ export default function App() {
             });
         }
     });
+
+    // ၃။ လစဉ်အတိုး ထည့်ခြင်း
+    for (let i = 0; i < 15; i++) {
+        const futureDate = new Date(today);
+        futureDate.setDate(today.getDate() + i);
+        const fDate = futureDate.getDate();
+        const fMonth = futureDate.getMonth();
+        const fYear = futureDate.getFullYear();
+        const timeKey = futureDate.getTime().toString();
+
+        monthlyLoansData.forEach(ml => {
+            if (ml.day === fDate) {
+                if (!timeline[timeKey]) timeline[timeKey] = [];
+                const repKey = `${ml.id}_${fYear}_${fMonth}`;
+                const isPaid = !!monthlyLoanRepayments[repKey];
+
+                timeline[timeKey].push({
+                    isDailyLoan: false,
+                    isMonthlyLoan: true,
+                    groupId: ml.id,
+                    groupName: `💰 လစဉ်အတိုး (${ml.creditor})`,
+                    turn: `လစဉ် ${ml.day} ရက်နေ့`,
+                    dateStr: `${fDate}.${fMonth + 1}.${fYear.toString().slice(-2)}`,
+                    paidAmt: isPaid ? ml.amount : 0,
+                    expectedAmt: ml.amount,
+                    isSelf: false
+                });
+            }
+        });
+    }
 
     const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 15);
 
@@ -482,31 +573,37 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs */}
-                <div className="flex flex-wrap bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-3xl mx-auto gap-1">
+                {/* View Switcher Tabs (Scrollable on mobile) */}
+                <div className="flex overflow-x-auto bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-4xl mx-auto gap-1" style={{ scrollbarWidth: 'none' }}>
                     <button
                         onClick={() => setViewMode('dashboard')}
-                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                        className={`flex-1 min-w-[140px] whitespace-nowrap py-2.5 px-3 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
-                        📅 Upcoming Payments
+                        📅 Upcoming
                     </button>
                     <button
                         onClick={() => setViewMode('summary')}
-                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'summary' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                        className={`flex-1 min-w-[140px] whitespace-nowrap py-2.5 px-3 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'summary' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
                         📊 လစဉ်/အခြေအနေ
                     </button>
                     <button
                         onClick={() => setViewMode('group')}
-                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'group' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                        className={`flex-1 min-w-[140px] whitespace-nowrap py-2.5 px-3 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'group' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
                         📝 အဖွဲ့အလိုက်
                     </button>
                     <button
                         onClick={() => setViewMode('loan')}
-                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'loan' ? 'bg-[#0b3c1a] text-[#cfad5e] shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-200 border border-gray-200 md:border-none'}`}
+                        className={`flex-1 min-w-[140px] whitespace-nowrap py-2.5 px-3 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'loan' ? 'bg-[#0b3c1a] text-[#cfad5e] shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-200 border border-gray-200 md:border-none'}`}
                     >
                         💸 နေ့ပြန်တိုး
+                    </button>
+                    <button
+                        onClick={() => setViewMode('monthly_loan')}
+                        className={`flex-1 min-w-[140px] whitespace-nowrap py-2.5 px-3 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'monthly_loan' ? 'bg-indigo-900 text-indigo-200 shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-200 border border-gray-200 md:border-none'}`}
+                    >
+                        🗓️ လစဉ်အတိုး
                     </button>
                 </div>
 
@@ -514,6 +611,90 @@ export default function App() {
                      <div className="py-20 flex flex-col items-center justify-center gap-4 text-[#0b3c1a]">
                         <svg className="animate-spin h-8 w-8 text-[#cfad5e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         <span className="font-bold text-lg">အချက်အလက်များကို ဆွဲယူနေပါသည်...</span>
+                    </div>
+
+                ) : viewMode === 'monthly_loan' ? (
+                    
+                    /* ==========================================
+                       လစဉ်အတိုး စာရင်း View
+                    ========================================== */
+                    <div className="max-w-3xl mx-auto animate-fade-in">
+                        <div className="flex flex-col items-center justify-center mb-6 relative">
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-indigo-900 drop-shadow-sm text-center leading-relaxed">
+                                🗓️ လစဉ်အတိုး ဆပ်ရမည့်စာရင်း
+                            </h1>
+                            <div className="h-6 mt-3">
+                                {isSaving && (
+                                    <span className="text-sm font-semibold text-indigo-700 bg-indigo-100 border border-indigo-200 px-4 py-1.5 rounded-full animate-pulse shadow-sm flex items-center gap-2">
+                                        <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        မှတ်သားနေပါသည်...
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Month Selector */}
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6">
+                            <button 
+                                onClick={() => { const d = new Date(monthlyViewDate); d.setMonth(d.getMonth() - 1); setMonthlyViewDate(d); }}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold transition-colors"
+                            >
+                                ← ယခင်လ
+                            </button>
+                            <div className="text-xl font-black text-indigo-900">
+                                {monthNames[monthlyViewDate.getMonth()]} လ ({monthlyViewDate.getFullYear()})
+                            </div>
+                            <button 
+                                onClick={() => { const d = new Date(monthlyViewDate); d.setMonth(d.getMonth() + 1); setMonthlyViewDate(d); }}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold transition-colors"
+                            >
+                                နောက်လ →
+                            </button>
+                        </div>
+
+                        {/* List of Monthly Loans */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-indigo-50 p-4 border-b border-indigo-100">
+                                <h3 className="font-bold text-indigo-900">ပေးသွင်းရမည့် အတိုးစာရင်း (လအလိုက်)</h3>
+                            </div>
+                            <div className="p-4 space-y-3">
+                                {monthlyLoansData.map(ml => {
+                                    const vYear = monthlyViewDate.getFullYear();
+                                    const vMonth = monthlyViewDate.getMonth();
+                                    const key = `${ml.id}_${vYear}_${vMonth}`;
+                                    const isPaid = !!monthlyLoanRepayments[key];
+
+                                    return (
+                                        <label 
+                                            key={ml.id} 
+                                            className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                                isPaid ? 'bg-indigo-50/50 border-indigo-500/50 hover:bg-indigo-50' : 'bg-white border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-6 h-6 shrink-0 rounded-md border flex items-center justify-center transition-colors ${isPaid ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
+                                                    {isPaid && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                </div>
+                                                <div>
+                                                    <div className={`font-bold text-base md:text-lg flex flex-wrap items-center gap-2 ${isPaid ? 'text-indigo-900' : 'text-gray-800'}`}>
+                                                        {ml.creditor} 
+                                                        <span className={`text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${isPaid ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>လစဉ် {ml.day} ရက်နေ့</span>
+                                                    </div>
+                                                    <div className={`font-semibold mt-1 ${isPaid ? 'text-indigo-600' : 'text-gray-500'}`}>{ml.amount.toLocaleString()} ကျပ်</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <input 
+                                                type="checkbox" 
+                                                className="hidden"
+                                                checked={isPaid}
+                                                onChange={() => handleMonthlyLoanToggle(ml.id, vYear, vMonth)}
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
 
                 ) : viewMode === 'summary' ? (
@@ -527,21 +708,23 @@ export default function App() {
                             <p className="text-gray-500 font-semibold mt-2">ယခုလ ({currentMonthName} လ) အတွင်း ထည့်သွင်းပြီးငွေ စုစုပေါင်း</p>
                         </div>
 
-                        {/* Top Cards (This Month Outgoings) */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 flex flex-col justify-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-50 rounded-bl-full -mr-4 -mt-4"></div>
-                                <div className="text-sm font-bold text-gray-500 mb-1">ယခုလ စုကြေးထွက်ငွေ</div>
-                                <div className="text-2xl lg:text-3xl font-black text-emerald-700">{thisMonthSukyaePaid.toLocaleString()} ကျပ်</div>
+                        {/* Top Cards (This Month Outgoings - ယခုအခါ ၄ ကွက်ဖြစ်သွားမည်) */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100 flex flex-col justify-center">
+                                <div className="text-xs md:text-sm font-bold text-gray-500 mb-1">စုကြေး ထွက်ငွေ</div>
+                                <div className="text-xl md:text-2xl font-black text-emerald-700">{thisMonthSukyaePaid.toLocaleString()}</div>
                             </div>
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-100 flex flex-col justify-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 rounded-bl-full -mr-4 -mt-4"></div>
-                                <div className="text-sm font-bold text-gray-500 mb-1">ယခုလ နေ့ပြန်တိုးထွက်ငွေ</div>
-                                <div className="text-2xl lg:text-3xl font-black text-blue-700">{thisMonthLoanPaid.toLocaleString()} ကျပ်</div>
+                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-blue-100 flex flex-col justify-center">
+                                <div className="text-xs md:text-sm font-bold text-gray-500 mb-1">နေ့ပြန်တိုး ထွက်ငွေ</div>
+                                <div className="text-xl md:text-2xl font-black text-blue-700">{thisMonthLoanPaid.toLocaleString()}</div>
                             </div>
-                            <div className="bg-[#0b3c1a] rounded-2xl p-6 shadow-md border-b-4 border-[#cfad5e] flex flex-col justify-center text-white">
-                                <div className="text-sm font-bold text-[#cfad5e] mb-1 opacity-90">ယခုလ စုစုပေါင်း ထွက်ငွေ</div>
-                                <div className="text-3xl lg:text-4xl font-black tracking-tight">{(thisMonthSukyaePaid + thisMonthLoanPaid).toLocaleString()} ကျပ်</div>
+                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-indigo-100 flex flex-col justify-center">
+                                <div className="text-xs md:text-sm font-bold text-gray-500 mb-1">လစဉ်အတိုး ထွက်ငွေ</div>
+                                <div className="text-xl md:text-2xl font-black text-indigo-700">{thisMonthMonthlyLoanPaid.toLocaleString()}</div>
+                            </div>
+                            <div className="bg-[#0b3c1a] rounded-2xl p-5 shadow-md border-b-4 border-[#cfad5e] flex flex-col justify-center text-white">
+                                <div className="text-xs md:text-sm font-bold text-[#cfad5e] mb-1 opacity-90">ယခုလ စုစုပေါင်း</div>
+                                <div className="text-2xl md:text-3xl font-black tracking-tight">{(thisMonthSukyaePaid + thisMonthLoanPaid + thisMonthMonthlyLoanPaid).toLocaleString()}</div>
                             </div>
                         </div>
 
@@ -612,7 +795,7 @@ export default function App() {
                             const isTomorrow = dateObj.getTime() === today.getTime() + 86400000;
                             const dateStr = `${dateObj.getDate()}.${dateObj.getMonth() + 1}.${dateObj.getFullYear().toString().slice(-2)}`;
                             
-                            const sukyaeEvents = events.filter(e => !e.isLoan);
+                            const sukyaeEvents = events.filter(e => !e.isDailyLoan && !e.isMonthlyLoan);
                             
                             let dailyTotal = 0;
                             let pendingCount = 0;
@@ -623,7 +806,7 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    if (!e.isLoan && e.paidAmt === 0) pendingCount += 1;
+                                    if (!e.isDailyLoan && !e.isMonthlyLoan && e.paidAmt === 0) pendingCount += 1;
                                 }
                             });
 
@@ -647,25 +830,56 @@ export default function App() {
                                         )}
 
                                         {events.map((ev, i) => (
-                                            ev.isLoan ? (
-                                                <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-emerald-50/40 p-3.5 rounded-lg border border-emerald-100 gap-3">
+                                            ev.isDailyLoan ? (
+                                                <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-blue-50/40 p-3.5 rounded-lg border border-blue-100 gap-3">
                                                     <div className="flex-1">
-                                                        <div className="font-bold text-emerald-900 text-[15px] flex items-center gap-1.5">
+                                                        <div className="font-bold text-blue-900 text-[15px] flex items-center gap-1.5">
                                                             {ev.groupName}
                                                         </div>
-                                                        <div className="text-sm text-emerald-700 font-semibold mt-0.5">ရက် - {ev.turn}</div>
+                                                        <div className="text-sm text-blue-700 font-semibold mt-0.5">ရက် - {ev.turn}</div>
                                                     </div>
                                                     <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
                                                         <button 
                                                             onClick={() => setViewMode('loan')}
-                                                            className="text-xs font-bold text-emerald-700 bg-emerald-100/70 px-3 py-1 rounded-full hover:bg-emerald-200 transition-colors md:mb-1 border border-emerald-200"
+                                                            className="text-xs font-bold text-blue-700 bg-blue-100/70 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors md:mb-1 border border-blue-200"
                                                         >
                                                             စာရင်းသို့သွားရန် →
                                                         </button>
                                                         {ev.paidAmt > 0 ? (
                                                             <div className="flex flex-col items-end mt-1 md:mt-0">
-                                                                <span className="font-black text-emerald-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
-                                                                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
+                                                                <span className="font-black text-blue-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                                    ပေးသွင်းပြီး
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
+                                                                <span className="font-black text-rose-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">မပေးသွင်းရသေးပါ</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : ev.isMonthlyLoan ? (
+                                                <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-indigo-50/40 p-3.5 rounded-lg border border-indigo-100 gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-indigo-900 text-[15px] flex items-center gap-1.5">
+                                                            {ev.groupName}
+                                                        </div>
+                                                        <div className="text-sm text-indigo-700 font-semibold mt-0.5">{ev.turn}</div>
+                                                    </div>
+                                                    <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
+                                                        <button 
+                                                            onClick={() => setViewMode('monthly_loan')}
+                                                            className="text-xs font-bold text-indigo-700 bg-indigo-100/70 px-3 py-1 rounded-full hover:bg-indigo-200 transition-colors md:mb-1 border border-indigo-200"
+                                                        >
+                                                            စာရင်းသို့သွားရန် →
+                                                        </button>
+                                                        {ev.paidAmt > 0 ? (
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
+                                                                <span className="font-black text-indigo-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
                                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                                                     ပေးသွင်းပြီး
                                                                 </span>
