@@ -158,10 +158,10 @@ const groups = [
 const parseDate = (dStr: string) => {
     const parts = dStr.split('.');
     if (parts.length === 3) {
-        const d = parts[0].padStart(2, '0');
-        const m = parts[1].padStart(2, '0');
-        const y = parts[2];
-        return new Date(`20${y}-${m}-${d}T00:00:00`);
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1; // Month index starts from 0
+        const y = parseInt(`20${parts[2]}`, 10);
+        return new Date(y, m, d); // Creates date strictly in local time exactly at 00:00:00
     }
     return new Date();
 };
@@ -206,7 +206,6 @@ export default function App() {
             });
         });
 
-        // နေ့ပြန်တိုး (Loan) အတွက် Data ဆွဲယူရန် (မူလ ၄ ရက် ပြီးစီးကြောင်း သတ်မှတ်ပေးထားသည်)
         const loanUnsub = onSnapshot(doc(db, "loanData", "daily_loan_1"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -254,7 +253,6 @@ export default function App() {
         saveToFirebase(selectedGroupId, currentActualPaid, newWhoTakes);
     };
 
-    // နေ့ပြန်တိုးအတွက် အမှန်ခြစ်ပြောင်းလဲမှုကို သိမ်းဆည်းရန်
     const handleLoanRepaymentToggle = async (day: number) => {
         const newRepayments = { ...loanRepayments, [day]: !loanRepayments[day] };
         setLoanRepayments(newRepayments);
@@ -317,13 +315,13 @@ export default function App() {
     const isNetLoss = netAmount < 0;
 
     // နေ့ပြန်တိုးအတွက် အချက်အလက်များ
-    const loanPrincipal = 20000000; // သိန်း ၂၀၀
-    const loanDailyPayment = 371450; // တစ်ရက်ပေးရမည့်ငွေ
-    const loanTotalDays = 70; // စုစုပေါင်း ၇၀ ရက်
+    const loanPrincipal = 20000000; 
+    const loanDailyPayment = 371450; 
+    const loanTotalDays = 70; 
     const loanTotalRepayment = loanDailyPayment * loanTotalDays; 
     const loanTotalInterest = loanTotalRepayment - loanPrincipal; 
     
-    // နေ့ပြန်တိုးအတွက် ၇၀ ရက်စာ Date များ တွက်ချက်ခြင်း (✅ Day 1 ကို ၂၅.၆.၂၆ ဟု မှန်ကန်စွာ သတ်မှတ်ထားသည်)
+    // နေ့ပြန်တိုး Date များ
     const loanDates = useMemo(() => {
         return Array.from({ length: loanTotalDays }, (_, i) => {
             const d = parseDate("25.6.26"); 
@@ -336,17 +334,24 @@ export default function App() {
         });
     }, []);
 
-    let timeline: Record<string, any[]> = {};
+    // ယနေ့ရက်စွဲ (Past events များကို ဖျောက်ရန်)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() - 3);
 
-    // စုကြေး အချက်အလက်များကို Timeline ထဲသို့ ထည့်ခြင်း
+    let timeline: Record<string, any[]> = {};
+
+    // စုကြေး Holiday ပြသနိုင်ရန် ရှေ့လာမည့် ၁၅ ရက်စာ အခွံ (Empty Array) များ ကြိုတင်ဖန်တီးထားခြင်း
+    for (let i = 0; i < 15; i++) {
+        const futureDate = new Date(today);
+        futureDate.setDate(today.getDate() + i);
+        timeline[futureDate.getTime().toString()] = [];
+    }
+
+    // စုကြေး အချက်အလက်များကို Timeline ထဲသို့ ထည့်ခြင်း (ယနေ့နှင့် နောက်ရက်များကိုသာ)
     groups.forEach(g => {
         g.data.forEach((row, index) => {
             const dateObj = parseDate(row.date);
-            if (dateObj >= checkDate) {
+            if (dateObj >= today) {
                 const timeKey = dateObj.getTime().toString();
                 if (!timeline[timeKey]) timeline[timeKey] = [];
                 
@@ -368,9 +373,9 @@ export default function App() {
         });
     });
 
-    // နေ့ပြန်တိုး အချက်အလက်များကို Timeline (Dashboard) ထဲသို့ အလိုအလျောက် ပေါင်းထည့်ခြင်း
+    // နေ့ပြန်တိုး အချက်အလက်များကို Timeline ထဲသို့ ပေါင်းထည့်ခြင်း (ယနေ့နှင့် နောက်ရက်များကိုသာ)
     loanDates.forEach(ld => {
-        if (ld.dateObj >= checkDate) {
+        if (ld.dateObj >= today) {
             const timeKey = ld.dateObj.getTime().toString();
             if (!timeline[timeKey]) timeline[timeKey] = [];
             
@@ -389,7 +394,8 @@ export default function App() {
         }
     });
 
-    const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 20);
+    // အစီအစဉ်ကျအောင် စီပြီး ရှေ့လာမည့် ၁၅ ရက်ကိုသာ ပြသမည်
+    const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 15);
 
     let loanPaidDaysCount = 0;
     Object.values(loanRepayments).forEach(isPaid => {
@@ -462,8 +468,13 @@ export default function App() {
                         {sortedTimeKeys.map(timeKey => {
                             const events = timeline[timeKey];
                             const dateObj = new Date(parseInt(timeKey));
+                            
                             const isToday = dateObj.getTime() === today.getTime();
-                            const isPast = dateObj.getTime() < today.getTime();
+                            const isTomorrow = dateObj.getTime() === today.getTime() + 86400000;
+                            const dateStr = `${dateObj.getDate()}.${dateObj.getMonth() + 1}.${dateObj.getFullYear().toString().slice(-2)}`;
+                            
+                            // စုကြေး Events သီးသန့်စစ်ထုတ်ခြင်း (Holiday ပြသရန်အတွက်)
+                            const sukyaeEvents = events.filter(e => !e.isLoan);
                             
                             let dailyTotal = 0;
                             let pendingCount = 0;
@@ -474,21 +485,30 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    // နေ့ပြန်တိုးမဟုတ်ဘဲ စုကြေးလေလံမဆွဲရသေးတာကိုသာ pending အဖြစ်ပြမည်
+                                    // စုကြေး လေလံမဆွဲရသေးတာကိုသာ pending အဖြစ်ပြမည်
                                     if (!e.isLoan && e.paidAmt === 0) pendingCount += 1;
                                 }
                             });
 
                             return (
-                                <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${isToday ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' : isPast ? 'bg-gray-50/50 border-gray-200 opacity-70' : 'bg-white border-gray-200'}`}>
+                                <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${isToday ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' : 'bg-white border-gray-200'}`}>
                                     <div className={`p-4 border-b flex justify-between items-center ${isToday ? 'bg-[#cfad5e]/20 border-[#cfad5e]/30' : 'bg-gray-50 border-gray-100'}`}>
                                         <h3 className={`font-black text-lg flex items-center gap-2 ${isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
-                                            📅 {events[0].dateStr} {isToday && <span className="text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
+                                            📅 {dateStr}
+                                            {isToday && <span className="text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
+                                            {isTomorrow && <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full uppercase tracking-wider">မနက်ဖြန်</span>}
                                         </h3>
                                         <div className="text-sm font-bold text-gray-500">စုစုပေါင်း - {events.length} ခု</div>
                                     </div>
                                     
                                     <div className="p-4 space-y-3">
+                                        {/* ယနေ့အတွက် စုကြေး လုံးဝမရှိပါက ပြသရန် Holiday UI */}
+                                        {sukyaeEvents.length === 0 && (
+                                            <div className="bg-emerald-50/50 text-emerald-700 p-4 rounded-xl border border-emerald-100 flex items-center justify-center font-bold shadow-inner">
+                                                🌴 ယနေ့အတွက် စုကြေးထည့်ရန်မရှိပါ။ (Holiday)
+                                            </div>
+                                        )}
+
                                         {events.map((ev, i) => (
                                             ev.isLoan ? (
                                                 <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-emerald-50/40 p-3.5 rounded-lg border border-emerald-100 gap-3">
@@ -506,7 +526,7 @@ export default function App() {
                                                             စာရင်းသို့သွားရန် →
                                                         </button>
                                                         {ev.paidAmt > 0 ? (
-                                                            <div className="flex flex-col items-end">
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-emerald-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
                                                                 <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
                                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
@@ -514,7 +534,7 @@ export default function App() {
                                                                 </span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col items-end">
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-rose-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
                                                                 <span className="text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">မပေးသွင်းရသေးပါ</span>
                                                             </div>
@@ -535,11 +555,11 @@ export default function App() {
                                                             အဖွဲ့သို့သွားရန် →
                                                         </button>
                                                         {ev.isSelf ? (
-                                                            <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded">မိမိယူမည့်ရက် 🎉</span>
+                                                            <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded mt-1 md:mt-0">မိမိယူမည့်ရက် 🎉</span>
                                                         ) : ev.paidAmt > 0 ? (
-                                                            <span className="font-black text-blue-700 text-base">{ev.paidAmt.toLocaleString()} ကျပ်</span>
+                                                            <span className="font-black text-blue-700 text-base mt-1 md:mt-0">{ev.paidAmt.toLocaleString()} ကျပ်</span>
                                                         ) : (
-                                                            <div className="flex flex-col items-end">
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-amber-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
                                                                 <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">ခန့်မှန်း (ကြမ်းခင်းစျေး)</span>
                                                             </div>
