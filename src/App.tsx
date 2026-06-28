@@ -181,17 +181,17 @@ export default function App() {
     const [viewMode, setViewMode] = useState<'dashboard' | 'summary' | 'group' | 'loan' | 'monthly_loan'>('dashboard');
     const [selectedGroupId, setSelectedGroupId] = useState(groups[0].id);
 
-    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန်
+    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန် (အသစ် - isPaid ထည့်သွင်းထားသည်)
     const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
     const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
+    const [allIsPaid, setAllIsPaid] = useState<Record<string, Record<number, boolean>>>({});
     
     // နေ့ပြန်တိုး Data များကို သိမ်းဆည်းထားရန်
     const [loanRepayments, setLoanRepayments] = useState<Record<number, boolean>>({});
     
-    // လစဉ်အတိုး Data များကို သိမ်းဆည်းထားရန် (key format: "id_year_month")
+    // လစဉ်အတိုး Data များကို သိမ်းဆည်းထားရန်
     const [monthlyLoanRepayments, setMonthlyLoanRepayments] = useState<Record<string, boolean>>({});
 
-    // လစဉ်အတိုး View တွင် ကြည့်ရှုမည့် လ/နှစ် ကို သတ်မှတ်ရန်
     const [monthlyViewDate, setMonthlyViewDate] = useState(new Date());
 
     const [isSaving, setIsSaving] = useState(false);
@@ -202,6 +202,7 @@ export default function App() {
     const { totalPot, basePerPerson, totalMembers, data: auctionData } = currentGroup;
     const currentActualPaid = allActualPaid[selectedGroupId] || {};
     const currentWhoTakes = allWhoTakes[selectedGroupId] || {};
+    const currentIsPaid = allIsPaid[selectedGroupId] || {};
 
     // React စဖွင့်ချိန်တွင် Tab Title ကို ပြောင်းပေးရန်
     useEffect(() => {
@@ -216,14 +217,16 @@ export default function App() {
                     const data = docSnap.data();
                     setAllActualPaid(prev => ({...prev, [g.id]: data.actualPaid || {}}));
                     setAllWhoTakes(prev => ({...prev, [g.id]: data.whoTakes || {}}));
+                    setAllIsPaid(prev => ({...prev, [g.id]: data.isPaid || {}}));
                 } else {
                     setAllActualPaid(prev => ({...prev, [g.id]: {}}));
                     setAllWhoTakes(prev => ({...prev, [g.id]: {}}));
+                    setAllIsPaid(prev => ({...prev, [g.id]: {}}));
                 }
             });
         });
 
-        // နေ့ပြန်တိုး Data ဆွဲယူရန်
+        // နေ့ပြန်တိုး (Loan) အတွက် Data ဆွဲယူရန်
         const loanUnsub = onSnapshot(doc(db, "loanData", "daily_loan_1"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -250,14 +253,15 @@ export default function App() {
         };
     }, []);
 
-    const saveToFirebase = async (groupId: string, newActualPaid: Record<number, number>, newWhoTakes: Record<number, string>) => {
+    const saveToFirebase = async (groupId: string, newActualPaid: Record<number, number>, newWhoTakes: Record<number, string>, newIsPaid: Record<number, boolean>) => {
         setIsSaving(true);
         try {
             await setDoc(doc(db, "auctionData", groupId), {
                 actualPaid: newActualPaid,
                 whoTakes: newWhoTakes,
+                isPaid: newIsPaid,
                 lastUpdated: new Date().toISOString()
-            });
+            }, { merge: true });
         } catch (error) {
             console.error("Firebase သို့သိမ်းဆည်းရာတွင် အမှားဖြစ်နေပါသည်:", error);
         }
@@ -278,7 +282,17 @@ export default function App() {
             ...prev,
             [selectedGroupId]: newWhoTakes
         }));
-        saveToFirebase(selectedGroupId, currentActualPaid, newWhoTakes);
+        saveToFirebase(selectedGroupId, currentActualPaid, newWhoTakes, currentIsPaid);
+    };
+
+    // စုကြေးပေးသွင်းပြီးကြောင်း အမှန်ခြစ်ရန် Function အသစ်
+    const handleIsPaidToggle = (index: number) => {
+        const newIsPaid = { ...currentIsPaid, [index]: !currentIsPaid[index] };
+        setAllIsPaid(prev => ({
+            ...prev,
+            [selectedGroupId]: newIsPaid
+        }));
+        saveToFirebase(selectedGroupId, currentActualPaid, currentWhoTakes, newIsPaid);
     };
 
     const handleLoanRepaymentToggle = async (day: number) => {
@@ -290,7 +304,7 @@ export default function App() {
             await setDoc(doc(db, "loanData", "daily_loan_1"), {
                 repayments: newRepayments,
                 lastUpdated: new Date().toISOString()
-            });
+            }, { merge: true });
         } catch (error) {
             console.error("Firebase သို့ နေ့ပြန်တိုး သိမ်းဆည်းရာတွင် အမှားဖြစ်နေပါသည်:", error);
         }
@@ -318,6 +332,7 @@ export default function App() {
         const row = auctionData[index];
         const paid = currentActualPaid[index] || 0;
         const isSelf = currentWhoTakes[index] === 'self' && row.n !== 1;
+        const isPaid = !!currentIsPaid[index];
         
         let receivedAmount = '-';
         let profitAmount = '-';
@@ -332,7 +347,7 @@ export default function App() {
             profitAmount = othersProfit > 0 ? othersProfit.toLocaleString() : '0';
             lossAmount = winnerLoss > 0 ? winnerLoss.toLocaleString() : '0';
         }
-        return { currentPaid: paid, isSelf, receivedAmount, profitAmount, lossAmount };
+        return { currentPaid: paid, isSelf, isPaid, receivedAmount, profitAmount, lossAmount };
     };
 
     // ==========================================
@@ -469,6 +484,7 @@ export default function App() {
                 
                 const paidAmt = allActualPaid[g.id]?.[index] || 0;
                 const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
+                const isPaid = !!allIsPaid[g.id]?.[index]; // User ticked the checkbox
                 const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
@@ -480,7 +496,8 @@ export default function App() {
                     dateStr: row.date,
                     paidAmt: paidAmt,
                     expectedAmt: expectedAmt,
-                    isSelf: isSelf
+                    isSelf: isSelf,
+                    isPaid: isPaid
                 });
             }
         });
@@ -503,7 +520,8 @@ export default function App() {
                 dateStr: ld.dateStr,
                 paidAmt: isPaid ? loanDailyPayment : 0,
                 expectedAmt: loanDailyPayment,
-                isSelf: false
+                isSelf: false,
+                isPaid: isPaid
             });
         }
     });
@@ -532,7 +550,8 @@ export default function App() {
                     dateStr: `${fDate}.${fMonth + 1}.${fYear.toString().slice(-2)}`,
                     paidAmt: isPaid ? ml.amount : 0,
                     expectedAmt: ml.amount,
-                    isSelf: false
+                    isSelf: false,
+                    isPaid: isPaid
                 });
             }
         });
@@ -573,7 +592,7 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs (Scrollable on mobile) */}
+                {/* View Switcher Tabs */}
                 <div className="flex overflow-x-auto bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-4xl mx-auto gap-1" style={{ scrollbarWidth: 'none' }}>
                     <button
                         onClick={() => setViewMode('dashboard')}
@@ -633,7 +652,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Month Selector */}
                         <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6">
                             <button 
                                 onClick={() => { const d = new Date(monthlyViewDate); d.setMonth(d.getMonth() - 1); setMonthlyViewDate(d); }}
@@ -652,7 +670,6 @@ export default function App() {
                             </button>
                         </div>
 
-                        {/* List of Monthly Loans */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="bg-indigo-50 p-4 border-b border-indigo-100">
                                 <h3 className="font-bold text-indigo-900">ပေးသွင်းရမည့် အတိုးစာရင်း (လအလိုက်)</h3>
@@ -708,7 +725,6 @@ export default function App() {
                             <p className="text-gray-500 font-semibold mt-2">ယခုလ ({currentMonthName} လ) အတွင်း ထည့်သွင်းပြီးငွေ စုစုပေါင်း</p>
                         </div>
 
-                        {/* Top Cards (This Month Outgoings - ယခုအခါ ၄ ကွက်ဖြစ်သွားမည်) */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100 flex flex-col justify-center">
                                 <div className="text-xs md:text-sm font-bold text-gray-500 mb-1">စုကြေး ထွက်ငွေ</div>
@@ -728,7 +744,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Middle Section: Group Status */}
                         <div className="mt-10">
                             <h3 className="font-bold text-xl text-gray-800 mb-5 border-l-4 border-[#0b3c1a] pl-3">အဖွဲ့များ၏ လက်ရှိအခြေအနေ</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -762,7 +777,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Bottom Section: Total Paid per Group */}
                         <div className="mt-10 pb-10">
                             <h3 className="font-bold text-xl text-gray-800 mb-5 border-l-4 border-[#cfad5e] pl-3">အဖွဲ့အလိုက် ထည့်သွင်းပြီးငွေများ (အစမှ ယနေ့ထိ)</h3>
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -806,19 +820,36 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    if (!e.isDailyLoan && !e.isMonthlyLoan && e.paidAmt === 0) pendingCount += 1;
+                                    // ပေးသွင်းရန်ကျန်ရှိနေသော အရေအတွက်တွက်ရန် (isPaid === false)
+                                    if (!e.isPaid) pendingCount += 1;
                                 }
                             });
 
+                            // အားလုံးပြီးစီးပါက (Pending လုံးဝမရှိပါက) ကတ်အရောင်ကို အစိမ်းရောင်ပြောင်းမည်
+                            const allEventsDone = events.length > 0 && pendingCount === 0;
+
                             return (
-                                <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${isToday ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' : 'bg-white border-gray-200'}`}>
-                                    <div className={`p-4 border-b flex justify-between items-center ${isToday ? 'bg-[#cfad5e]/20 border-[#cfad5e]/30' : 'bg-gray-50 border-gray-100'}`}>
-                                        <h3 className={`font-black text-lg flex items-center gap-2 ${isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
+                                <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${
+                                    allEventsDone 
+                                        ? 'bg-emerald-50/40 border-emerald-500 ring-1 ring-emerald-500/50' 
+                                        : isToday 
+                                            ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' 
+                                            : 'bg-white border-gray-200'
+                                }`}>
+                                    <div className={`p-4 border-b flex justify-between items-center ${
+                                        allEventsDone 
+                                            ? 'bg-emerald-500/10 border-emerald-500/30' 
+                                            : isToday 
+                                                ? 'bg-[#cfad5e]/20 border-[#cfad5e]/30' 
+                                                : 'bg-gray-50 border-gray-100'
+                                    }`}>
+                                        <h3 className={`font-black text-lg flex items-center gap-2 ${allEventsDone ? 'text-emerald-800' : isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
                                             📅 {dateStr}
-                                            {isToday && <span className="text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
-                                            {isTomorrow && <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full uppercase tracking-wider">မနက်ဖြန်</span>}
+                                            {isToday && !allEventsDone && <span className="text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
+                                            {isTomorrow && !allEventsDone && <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full uppercase tracking-wider">မနက်ဖြန်</span>}
+                                            {allEventsDone && <span className="text-xs bg-emerald-600 text-white px-2 py-1 rounded-full uppercase tracking-wider">အားလုံးပြီးစီး</span>}
                                         </h3>
-                                        <div className="text-sm font-bold text-gray-500">စုစုပေါင်း - {events.length} ခု</div>
+                                        <div className={`text-sm font-bold ${allEventsDone ? 'text-emerald-600' : 'text-gray-500'}`}>စုစုပေါင်း - {events.length} ခု</div>
                                     </div>
                                     
                                     <div className="p-4 space-y-3">
@@ -845,7 +876,7 @@ export default function App() {
                                                         >
                                                             စာရင်းသို့သွားရန် →
                                                         </button>
-                                                        {ev.paidAmt > 0 ? (
+                                                        {ev.isPaid ? (
                                                             <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-blue-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
                                                                 <span className="text-[10px] text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
@@ -876,7 +907,7 @@ export default function App() {
                                                         >
                                                             စာရင်းသို့သွားရန် →
                                                         </button>
-                                                        {ev.paidAmt > 0 ? (
+                                                        {ev.isPaid ? (
                                                             <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-indigo-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
                                                                 <span className="text-[10px] text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
@@ -907,8 +938,14 @@ export default function App() {
                                                         </button>
                                                         {ev.isSelf ? (
                                                             <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded mt-1 md:mt-0">မိမိယူမည့်ရက် 🎉</span>
-                                                        ) : ev.paidAmt > 0 ? (
-                                                            <span className="font-black text-blue-700 text-base mt-1 md:mt-0">{ev.paidAmt.toLocaleString()} ကျပ်</span>
+                                                        ) : ev.isPaid ? (
+                                                            <div className="flex flex-col items-end mt-1 md:mt-0">
+                                                                <span className="font-black text-emerald-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                                    ပေးသွင်းပြီး
+                                                                </span>
+                                                            </div>
                                                         ) : (
                                                             <div className="flex flex-col items-end mt-1 md:mt-0">
                                                                 <span className="font-black text-amber-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
@@ -921,11 +958,21 @@ export default function App() {
                                         ))}
                                     </div>
                                     
-                                    <div className="bg-[#cfad5e]/10 p-4 border-t border-[#cfad5e]/30 flex flex-col md:flex-row justify-between items-center gap-2">
-                                        <span className="font-bold text-[#0b3c1a]">စုစုပေါင်း ထည့်ရမည့်ငွေ :</span>
+                                    <div className={`p-4 border-t flex flex-col md:flex-row justify-between items-center gap-2 ${
+                                        allEventsDone ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[#cfad5e]/10 border-[#cfad5e]/30'
+                                    }`}>
+                                        <span className={`font-bold ${allEventsDone ? 'text-emerald-800' : 'text-[#0b3c1a]'}`}>စုစုပေါင်း ထည့်ရမည့်ငွေ :</span>
                                         <div className="text-right flex flex-col items-center md:items-end">
-                                            <span className="font-black text-2xl text-[#0b3c1a]">{dailyTotal.toLocaleString()} ကျပ်</span>
-                                            {pendingCount > 0 && <div className="text-xs text-amber-600 font-bold mt-1">+ စုကြေး ({pendingCount}) ဖွဲ့အတွက် ခန့်မှန်းတွက်ချက်ထားပါသည်</div>}
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-black text-2xl ${allEventsDone ? 'text-emerald-700' : 'text-[#0b3c1a]'}`}>{dailyTotal.toLocaleString()} ကျပ်</span>
+                                                {allEventsDone && (
+                                                    <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-xs font-bold shadow-sm">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        ပေးသွင်းပြီး
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!allEventsDone && pendingCount > 0 && <div className="text-xs text-amber-600 font-bold mt-1">+ အဖွဲ့ ({pendingCount}) ခုအတွက် ပေးသွင်းရန်ကျန်သေးသည်</div>}
                                             {isReceiving && <div className="text-[13px] text-emerald-600 font-black mt-1.5 bg-emerald-100 px-3 py-1 rounded-full shadow-sm">🎉 ယနေ့ မိမိငွေယူမည့်ရက်ဖြစ်ပါသည်</div>}
                                         </div>
                                     </div>
@@ -1119,7 +1166,7 @@ export default function App() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
                             {auctionData.map((row, index) => {
-                                const { currentPaid, isSelf, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
+                                const { currentPaid, isSelf, isPaid, receivedAmount, profitAmount, lossAmount } = calculateRowData(index);
                                 
                                 return (
                                     <div key={index} className={`rounded-2xl shadow-sm border p-6 transition-all duration-200 hover:shadow-lg ${isSelf ? 'bg-[#cfad5e]/10 border-[#cfad5e] ring-1 ring-[#cfad5e]/50' : 'bg-white border-gray-200'}`}>
@@ -1151,7 +1198,7 @@ export default function App() {
                                                             placeholder="0"
                                                         />
                                                         <button 
-                                                            onClick={() => saveToFirebase(selectedGroupId, currentActualPaid, currentWhoTakes)}
+                                                            onClick={() => saveToFirebase(selectedGroupId, currentActualPaid, currentWhoTakes, currentIsPaid)}
                                                             className="bg-[#0b3c1a] hover:bg-[#0b3c1a]/90 text-[#cfad5e] px-3 rounded-xl shadow-md transition-colors flex items-center justify-center active:scale-95"
                                                             title="သိမ်းမည်"
                                                         >
@@ -1178,6 +1225,24 @@ export default function App() {
                                                         </select>
                                                     )}
                                                 </div>
+                                            </div>
+
+                                            {/* အဖွဲ့အလိုက် စာရင်းအတွက် - အသစ်ထည့်သွင်းထားသော Checkbox */}
+                                            <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+                                                <span className="text-gray-600 font-bold text-[13px]">ပေးသွင်းမှု အခြေအနေ:</span>
+                                                <button 
+                                                    onClick={() => handleIsPaidToggle(index)}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all active:scale-95 ${
+                                                        isPaid 
+                                                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700' 
+                                                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${isPaid ? 'bg-emerald-500 border-emerald-500' : 'border-gray-400'}`}>
+                                                        {isPaid && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                    </div>
+                                                    <span className="text-xs font-bold">{isPaid ? 'ပေးသွင်းပြီး' : 'မပေးရသေးပါ'}</span>
+                                                </button>
                                             </div>
 
                                             <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
