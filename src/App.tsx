@@ -159,34 +159,30 @@ const parseDate = (dStr: string) => {
     const parts = dStr.split('.');
     if (parts.length === 3) {
         const d = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1; // Month index starts from 0
+        const m = parseInt(parts[1], 10) - 1; 
         const y = parseInt(`20${parts[2]}`, 10);
-        return new Date(y, m, d); // Creates date strictly in local time exactly at 00:00:00
+        return new Date(y, m, d); 
     }
     return new Date();
 };
 
 export default function App() {
-    const [viewMode, setViewMode] = useState<'dashboard' | 'group' | 'loan'>('dashboard');
+    // Tab (၄) ခုအတွက် View Mode ပြောင်းလဲခြင်း
+    const [viewMode, setViewMode] = useState<'dashboard' | 'summary' | 'group' | 'loan'>('dashboard');
     const [selectedGroupId, setSelectedGroupId] = useState(groups[0].id);
 
-    // Group အားလုံး၏ Data များကို သိမ်းဆည်းထားရန်
     const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
     const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
-    
-    // နေ့ပြန်တိုး Data များကို သိမ်းဆည်းထားရန်
     const [loanRepayments, setLoanRepayments] = useState<Record<number, boolean>>({});
 
     const [isSaving, setIsSaving] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // လက်ရှိရွေးချယ်ထားသော အဖွဲ့၏ Data များ
     const currentGroup = groups.find(g => g.id === selectedGroupId) || groups[0];
     const { totalPot, basePerPerson, totalMembers, data: auctionData } = currentGroup;
     const currentActualPaid = allActualPaid[selectedGroupId] || {};
     const currentWhoTakes = allWhoTakes[selectedGroupId] || {};
 
-    // React စဖွင့်ချိန်တွင် Tab Title ကို MibaAyate|SuKyae အဖြစ် ပြောင်းပေးရန်
     useEffect(() => {
         document.title = "MibaAyate|SuKyae";
     }, []);
@@ -290,38 +286,23 @@ export default function App() {
         return { currentPaid: paid, isSelf, receivedAmount, profitAmount, lossAmount };
     };
 
-    let totalReceived = 0;
-    let totalGrossLoss = 0;
-    let totalOtherProfit = 0;
-    const selfTurns: number[] = [];
+    // လစဉ်အခြေအနေ Dashboard အတွက် တွက်ချက်မှုများ (This Month Summary)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const monthNames = ["ဇန်နဝါရီ", "ဖေဖော်ဝါရီ", "မတ်", "ဧပြီ", "မေ", "ဇွန်", "ဇူလိုင်", "ဩဂုတ်", "စက်တင်ဘာ", "အောက်တိုဘာ", "နိုဝင်ဘာ", "ဒီဇင်ဘာ"];
+    const currentMonthName = monthNames[currentMonth];
 
-    auctionData.forEach((row, index) => {
-        const paid = currentActualPaid[index] || 0;
-        if (paid > 0) {
-            if (currentWhoTakes[index] === 'self' && row.n !== 1) {
-                selfTurns.push(row.n);
-                const received = paid * totalMembers;
-                totalReceived += received;
-                totalGrossLoss += (totalPot - received);
-            } else if (row.n !== 1) {
-                const profit = basePerPerson - paid;
-                totalOtherProfit += profit;
-            }
-        }
-    });
+    let thisMonthSukyaePaid = 0;
+    let thisMonthLoanPaid = 0;
 
-    const netAmount = totalOtherProfit - totalGrossLoss;
-    const isNetProfit = netAmount > 0;
-    const isNetLoss = netAmount < 0;
-
-    // နေ့ပြန်တိုးအတွက် အချက်အလက်များ
     const loanPrincipal = 20000000; 
     const loanDailyPayment = 371450; 
     const loanTotalDays = 70; 
     const loanTotalRepayment = loanDailyPayment * loanTotalDays; 
     const loanTotalInterest = loanTotalRepayment - loanPrincipal; 
     
-    // နေ့ပြန်တိုး Date များ
     const loanDates = useMemo(() => {
         return Array.from({ length: loanTotalDays }, (_, i) => {
             const d = parseDate("25.6.26"); 
@@ -334,20 +315,61 @@ export default function App() {
         });
     }, []);
 
-    // ယနေ့ရက်စွဲ (Past events များကို ဖျောက်ရန်)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // နေ့ပြန်တိုး ယခုလ ထည့်ပြီးငွေ တွက်ချက်ခြင်း
+    loanDates.forEach(ld => {
+        if (ld.dateObj.getMonth() === currentMonth && ld.dateObj.getFullYear() === currentYear) {
+            if (loanRepayments[ld.day]) {
+                thisMonthLoanPaid += loanDailyPayment;
+            }
+        }
+    });
 
+    // အဖွဲ့များ၏ အခြေအနေ တွက်ချက်ခြင်း (Status)
+    const groupStats = groups.map(g => {
+        let totalPaidAllTime = 0;
+        let totalProfitAllTime = 0;
+        let hasTaken = false;
+        let takenTurn: number | null = null;
+
+        g.data.forEach((row, index) => {
+            const paid = allActualPaid[g.id]?.[index] || 0;
+            const who = allWhoTakes[g.id]?.[index];
+            const d = parseDate(row.date);
+            
+            if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                if (paid > 0) thisMonthSukyaePaid += paid;
+            }
+
+            if (paid > 0) {
+                totalPaidAllTime += paid;
+                if (who === 'self' && row.n !== 1) {
+                    hasTaken = true;
+                    takenTurn = row.n;
+                }
+                if (row.n !== 1 && who !== 'self') {
+                    totalProfitAllTime += (g.basePerPerson - paid);
+                }
+            }
+        });
+
+        return {
+            ...g,
+            totalPaidAllTime,
+            totalProfitAllTime,
+            hasTaken,
+            takenTurn
+        };
+    });
+
+    // Upcoming Payments Dashboard အတွက် Timeline တွက်ချက်မှုများ
     let timeline: Record<string, any[]> = {};
 
-    // စုကြေး Holiday ပြသနိုင်ရန် ရှေ့လာမည့် ၁၅ ရက်စာ အခွံ (Empty Array) များ ကြိုတင်ဖန်တီးထားခြင်း
     for (let i = 0; i < 15; i++) {
         const futureDate = new Date(today);
         futureDate.setDate(today.getDate() + i);
         timeline[futureDate.getTime().toString()] = [];
     }
 
-    // စုကြေး အချက်အလက်များကို Timeline ထဲသို့ ထည့်ခြင်း (ယနေ့နှင့် နောက်ရက်များကိုသာ)
     groups.forEach(g => {
         g.data.forEach((row, index) => {
             const dateObj = parseDate(row.date);
@@ -373,7 +395,6 @@ export default function App() {
         });
     });
 
-    // နေ့ပြန်တိုး အချက်အလက်များကို Timeline ထဲသို့ ပေါင်းထည့်ခြင်း (ယနေ့နှင့် နောက်ရက်များကိုသာ)
     loanDates.forEach(ld => {
         if (ld.dateObj >= today) {
             const timeKey = ld.dateObj.getTime().toString();
@@ -388,13 +409,12 @@ export default function App() {
                 turn: ld.day,
                 dateStr: ld.dateStr,
                 paidAmt: isPaid ? loanDailyPayment : 0,
-                expectedAmt: loanDailyPayment, // နေ့တိုင်း ပုံသေထွက်ငွေ
+                expectedAmt: loanDailyPayment,
                 isSelf: false
             });
         }
     });
 
-    // အစီအစဉ်ကျအောင် စီပြီး ရှေ့လာမည့် ၁၅ ရက်ကိုသာ ပြသမည်
     const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 15);
 
     let loanPaidDaysCount = 0;
@@ -408,7 +428,7 @@ export default function App() {
     return (
         <div className="bg-stone-50 min-h-screen font-sans pb-20 selection:bg-emerald-200">
             {/* Branding Header */}
-            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-3 md:p-4 shadow-lg flex justify-center items-center mb-8 border-b-4 border-[#cfad5e]">
+            <div className="bg-[#0b3c1a] text-[#f7e4a6] p-3 md:p-4 shadow-lg flex justify-center items-center mb-6 border-b-4 border-[#cfad5e]">
                 <div className="flex items-center gap-3 md:gap-4">
                     <img 
                         src="/logo.jpg" 
@@ -430,25 +450,31 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs */}
-                <div className="flex flex-wrap md:flex-nowrap bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-10 max-w-2xl mx-auto gap-1">
+                {/* View Switcher Tabs (ယခု (၄) ခု ဖြစ်သွားပါမည်) */}
+                <div className="flex flex-wrap bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-3xl mx-auto gap-1">
                     <button
                         onClick={() => setViewMode('dashboard')}
-                        className={`flex-1 py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs md:text-sm transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
-                        📅 ပေါင်းချုပ် Dashboard
+                        📅 Upcoming Payments
+                    </button>
+                    <button
+                        onClick={() => setViewMode('summary')}
+                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'summary' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        📊 လစဉ်/အခြေအနေ
                     </button>
                     <button
                         onClick={() => setViewMode('group')}
-                        className={`flex-1 py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs md:text-sm transition-all duration-300 ${viewMode === 'group' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'group' ? 'bg-[#cfad5e] text-[#0b3c1a] shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
-                        📝 အဖွဲ့အလိုက် စာရင်း
+                        📝 အဖွဲ့အလိုက်
                     </button>
                     <button
                         onClick={() => setViewMode('loan')}
-                        className={`w-full md:flex-1 py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs md:text-sm transition-all duration-300 ${viewMode === 'loan' ? 'bg-[#0b3c1a] text-[#cfad5e] shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-200 border border-gray-200 md:border-none mt-1 md:mt-0'}`}
+                        className={`flex-1 min-w-[140px] py-2.5 px-2 rounded-lg md:rounded-full font-bold text-xs sm:text-sm transition-all duration-300 ${viewMode === 'loan' ? 'bg-[#0b3c1a] text-[#cfad5e] shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-200 border border-gray-200 md:border-none'}`}
                     >
-                        💸 နေ့ပြန်တိုး စာရင်း
+                        💸 နေ့ပြန်တိုး
                     </button>
                 </div>
 
@@ -457,11 +483,92 @@ export default function App() {
                         <svg className="animate-spin h-8 w-8 text-[#cfad5e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         <span className="font-bold text-lg">အချက်အလက်များကို ဆွဲယူနေပါသည်...</span>
                     </div>
+
+                ) : viewMode === 'summary' ? (
+                    
+                    /* ==========================================
+                       လစဉ်/အခြေအနေ Dashboard View (အသစ်)
+                    ========================================== */
+                    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
+                        <div className="text-center mb-8">
+                            <h2 className="text-2xl md:text-3xl font-black text-[#0b3c1a]">📊 လစဉ်ထွက်ငွေ နှင့် စုကြေးအခြေအနေ</h2>
+                            <p className="text-gray-500 font-semibold mt-2">ယခုလ ({currentMonthName} လ) အတွင်း ထည့်သွင်းပြီးငွေ စုစုပေါင်း</p>
+                        </div>
+
+                        {/* Top Cards (This Month Outgoings) */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 flex flex-col justify-center relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-50 rounded-bl-full -mr-4 -mt-4"></div>
+                                <div className="text-sm font-bold text-gray-500 mb-1">ယခုလ စုကြေးထွက်ငွေ</div>
+                                <div className="text-2xl lg:text-3xl font-black text-emerald-700">{thisMonthSukyaePaid.toLocaleString()} ကျပ်</div>
+                            </div>
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-100 flex flex-col justify-center relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 rounded-bl-full -mr-4 -mt-4"></div>
+                                <div className="text-sm font-bold text-gray-500 mb-1">ယခုလ နေ့ပြန်တိုးထွက်ငွေ</div>
+                                <div className="text-2xl lg:text-3xl font-black text-blue-700">{thisMonthLoanPaid.toLocaleString()} ကျပ်</div>
+                            </div>
+                            <div className="bg-[#0b3c1a] rounded-2xl p-6 shadow-md border-b-4 border-[#cfad5e] flex flex-col justify-center text-white">
+                                <div className="text-sm font-bold text-[#cfad5e] mb-1 opacity-90">ယခုလ စုစုပေါင်း ထွက်ငွေ</div>
+                                <div className="text-3xl lg:text-4xl font-black tracking-tight">{(thisMonthSukyaePaid + thisMonthLoanPaid).toLocaleString()} ကျပ်</div>
+                            </div>
+                        </div>
+
+                        {/* Middle Section: Group Status */}
+                        <div className="mt-10">
+                            <h3 className="font-bold text-xl text-gray-800 mb-5 border-l-4 border-[#0b3c1a] pl-3">အဖွဲ့များ၏ လက်ရှိအခြေအနေ</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {groupStats.map((g, i) => (
+                                    <div key={i} className={`p-5 rounded-2xl border ${g.hasTaken ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-200'} flex flex-col justify-between`}>
+                                        <div className="mb-4">
+                                            <div className="font-bold text-gray-800 text-lg">{g.name}</div>
+                                        </div>
+                                        {g.hasTaken ? (
+                                            <div className="bg-white p-3 rounded-xl border border-orange-100 flex justify-between items-center">
+                                                <div>
+                                                    <span className="text-xs font-bold text-orange-800 bg-orange-100 px-2 py-1 rounded">ယူပြီး (အလှည့် - {g.takenTurn})</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-sm font-black text-orange-700">ယခု အကြွေးဆပ်နေရပါသည်</div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white p-3 rounded-xl border border-emerald-100 flex justify-between items-center">
+                                                <div>
+                                                    <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-1 rounded">မယူရသေးပါ</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-bold text-gray-500">လက်ရှိမြတ်ငွေ</div>
+                                                    <div className="text-lg font-black text-emerald-600">+{g.totalProfitAllTime.toLocaleString()}</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Bottom Section: Total Paid per Group */}
+                        <div className="mt-10 pb-10">
+                            <h3 className="font-bold text-xl text-gray-800 mb-5 border-l-4 border-[#cfad5e] pl-3">အဖွဲ့အလိုက် ထည့်သွင်းပြီးငွေများ (အစမှ ယနေ့ထိ)</h3>
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                {groupStats.map((g, i) => (
+                                    <div key={i} className={`p-4 flex flex-col sm:flex-row justify-between items-center gap-3 ${i !== groupStats.length - 1 ? 'border-b border-gray-100' : ''} hover:bg-gray-50 transition-colors`}>
+                                        <div className="font-bold text-gray-700 text-sm md:text-base text-center sm:text-left">{g.name}</div>
+                                        <div className="font-black text-lg text-[#0b3c1a] bg-gray-100 px-4 py-1.5 rounded-full">{g.totalPaidAllTime.toLocaleString()} ကျပ်</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
                 ) : viewMode === 'dashboard' ? (
                     
+                    /* ==========================================
+                       Upcoming Payments Dashboard View
+                    ========================================== */
                     <div className="max-w-4xl mx-auto space-y-6">
                         <div className="mb-6 border-l-4 border-[#0b3c1a] pl-4">
-                            <h2 className="text-2xl font-black text-gray-800">လာမည့် အလှည့်များ (Upcoming)</h2>
+                            <h2 className="text-2xl font-black text-gray-800">လာမည့် အလှည့်များ (Upcoming Payments)</h2>
                             <p className="text-gray-500 text-sm mt-1">အဖွဲ့ပေါင်းစုံ၏ ထည့်ရမည့်ရက်များကို တစ်စုတစ်စည်းတည်း ကြည့်ရှုနိုင်ပါသည်။</p>
                         </div>
 
@@ -473,7 +580,6 @@ export default function App() {
                             const isTomorrow = dateObj.getTime() === today.getTime() + 86400000;
                             const dateStr = `${dateObj.getDate()}.${dateObj.getMonth() + 1}.${dateObj.getFullYear().toString().slice(-2)}`;
                             
-                            // စုကြေး Events သီးသန့်စစ်ထုတ်ခြင်း (Holiday ပြသရန်အတွက်)
                             const sukyaeEvents = events.filter(e => !e.isLoan);
                             
                             let dailyTotal = 0;
@@ -485,7 +591,6 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    // စုကြေး လေလံမဆွဲရသေးတာကိုသာ pending အဖြစ်ပြမည်
                                     if (!e.isLoan && e.paidAmt === 0) pendingCount += 1;
                                 }
                             });
