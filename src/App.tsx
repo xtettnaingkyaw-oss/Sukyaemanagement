@@ -27,21 +27,21 @@ const groups = [
         basePerPerson: 500000,
         totalMembers: 30,
         data: [
-            {n: 1, date: "25.1.26", price: 15000000}, {n: 2, date: "30.1.26", price: 11000000},
-            {n: 3, date: "5.2.26", price: 11100000}, {n: 4, date: "10.2.26", price: 11200000},
-            {n: 5, date: "15.2.26", price: 11300000}, {n: 6, date: "20.2.26", price: 11400000},
-            {n: 7, date: "25.2.26", price: 11500000}, {n: 8, date: "2.3.26", price: 11600000},
-            {n: 9, date: "3.3.26", price: 11700000}, {n: 10, date: "11.3.26", price: 11800000},
-            {n: 11, date: "13.3.26", price: 11900000}, {n: 12, date: "22.3.26", price: 12000000},
-            {n: 13, date: "24.3.26", price: 12100000}, {n: 14, date: "26.3.26", price: 12200000},
-            {n: 15, date: "2.4.26", price: 12300000}, {n: 16, date: "12.4.26", price: 12400000},
-            {n: 17, date: "17.4.26", price: 12500000}, {n: 18, date: "22.4.26", price: 12600000},
-            {n: 19, date: "24.4.26", price: 12700000}, {n: 20, date: "2.5.26", price: 13000000},
-            {n: 21, date: "7.5.26", price: 13100000}, {n: 22, date: "12.5.26", price: 13300000},
-            {n: 23, date: "17.5.26", price: 13600000}, {n: 24, date: "22.5.26", price: 13700000},
-            {n: 25, date: "27.5.26", price: 14000000}, {n: 26, date: "2.6.26", price: 14100000},
-            {n: 27, date: "7.6.26", price: 14500000}, {n: 28, date: "12.6.26", price: 14600000},
-            {n: 29, date: "17.6.26", price: 14700000}, {n: 30, date: "22.6.26", price: 15000000}
+            {n: 1, date: "30.6.26", price: 15000000}, {n: 2, date: "5.7.26", price: 11000000},
+            {n: 3, date: "10.7.26", price: 11100000}, {n: 4, date: "15.7.26", price: 11200000},
+            {n: 5, date: "20.7.26", price: 11300000}, {n: 6, date: "25.7.26", price: 11400000},
+            {n: 7, date: "30.7.26", price: 11500000}, {n: 8, date: "5.8.26", price: 11600000},
+            {n: 9, date: "10.8.26", price: 11700000}, {n: 10, date: "15.8.26", price: 11800000},
+            {n: 11, date: "20.8.26", price: 11900000}, {n: 12, date: "25.8.26", price: 12000000},
+            {n: 13, date: "30.8.26", price: 12100000}, {n: 14, date: "5.9.26", price: 12200000},
+            {n: 15, date: "10.9.26", price: 12300000}, {n: 16, date: "15.9.26", price: 12400000},
+            {n: 17, date: "20.9.26", price: 12500000}, {n: 18, date: "25.9.26", price: 12600000},
+            {n: 19, date: "30.9.26", price: 12800000}, {n: 20, date: "5.10.26", price: 13000000},
+            {n: 21, date: "10.10.26", price: 13200000}, {n: 22, date: "15.10.26", price: 13400000},
+            {n: 23, date: "20.10.26", price: 13800000}, {n: 24, date: "25.10.26", price: 14000000},
+            {n: 25, date: "30.10.26", price: 14200000}, {n: 26, date: "5.11.26", price: 14400000},
+            {n: 27, date: "10.11.26", price: 14600000}, {n: 28, date: "15.11.26", price: 14800000},
+            {n: 29, date: "20.11.26", price: 15000000}, {n: 30, date: "25.11.26", price: 15000000}
         ]
     },
     {
@@ -226,7 +226,7 @@ export default function App() {
             });
         });
 
-        // နေ့ပြန်တိုး (Loan) အတွက် Data ဆွဲယူရန်
+        // နေ့ပြန်တိုး Data ဆွဲယူရန်
         const loanUnsub = onSnapshot(doc(db, "loanData", "daily_loan_1"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -484,7 +484,7 @@ export default function App() {
                 
                 const paidAmt = allActualPaid[g.id]?.[index] || 0;
                 const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
-                const isPaid = !!allIsPaid[g.id]?.[index]; // User ticked the checkbox
+                const isPaid = !!allIsPaid[g.id]?.[index]; 
                 const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
@@ -592,7 +592,7 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs */}
+                {/* View Switcher Tabs (Scrollable on mobile) */}
                 <div className="flex overflow-x-auto bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-8 max-w-4xl mx-auto gap-1" style={{ scrollbarWidth: 'none' }}>
                     <button
                         onClick={() => setViewMode('dashboard')}
@@ -820,12 +820,10 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    // ပေးသွင်းရန်ကျန်ရှိနေသော အရေအတွက်တွက်ရန် (isPaid === false)
                                     if (!e.isPaid) pendingCount += 1;
                                 }
                             });
 
-                            // အားလုံးပြီးစီးပါက (Pending လုံးဝမရှိပါက) ကတ်အရောင်ကို အစိမ်းရောင်ပြောင်းမည်
                             const allEventsDone = events.length > 0 && pendingCount === 0;
 
                             return (
