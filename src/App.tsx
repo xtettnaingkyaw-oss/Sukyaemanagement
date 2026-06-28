@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
@@ -174,8 +174,7 @@ export default function App() {
     const [allActualPaid, setAllActualPaid] = useState<Record<string, Record<number, number>>>({});
     const [allWhoTakes, setAllWhoTakes] = useState<Record<string, Record<number, string>>>({});
     
-    // နေ့ပြန်တိုး Data များကို သိမ်းဆည်းထားရန် (ရက် ၇၀ အတွက် boolean state)
-    // ဥပမာ- { 1: true, 2: true, 3: true, 4: true }
+    // နေ့ပြန်တိုး Data များကို သိမ်းဆည်းထားရန်
     const [loanRepayments, setLoanRepayments] = useState<Record<number, boolean>>({});
 
     const [isSaving, setIsSaving] = useState(false);
@@ -207,11 +206,11 @@ export default function App() {
             });
         });
 
-        // နေ့ပြန်တိုး (Loan) အတွက် Data ဆွဲယူရန်
+        // နေ့ပြန်တိုး (Loan) အတွက် Data ဆွဲယူရန် (မူလ ၄ ရက် ပြီးစီးကြောင်း သတ်မှတ်ပေးထားသည်)
         const loanUnsub = onSnapshot(doc(db, "loanData", "daily_loan_1"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                setLoanRepayments(data.repayments || { 1: true, 2: true, 3: true, 4: true }); // မူလ ၄ ရက် ပြီးစီးကြောင်း သတ်မှတ်ပေးထားသည်
+                setLoanRepayments(data.repayments || { 1: true, 2: true, 3: true, 4: true }); 
             } else {
                 setLoanRepayments({ 1: true, 2: true, 3: true, 4: true });
             }
@@ -317,12 +316,33 @@ export default function App() {
     const isNetProfit = netAmount > 0;
     const isNetLoss = netAmount < 0;
 
+    // နေ့ပြန်တိုးအတွက် အချက်အလက်များ
+    const loanPrincipal = 20000000; // သိန်း ၂၀၀
+    const loanDailyPayment = 371450; // တစ်ရက်ပေးရမည့်ငွေ
+    const loanTotalDays = 70; // စုစုပေါင်း ၇၀ ရက်
+    const loanTotalRepayment = loanDailyPayment * loanTotalDays; 
+    const loanTotalInterest = loanTotalRepayment - loanPrincipal; 
+    
+    // နေ့ပြန်တိုးအတွက် ၇၀ ရက်စာ Date များ တွက်ချက်ခြင်း (✅ Day 1 ကို ၂၅.၆.၂၆ ဟု မှန်ကန်စွာ သတ်မှတ်ထားသည်)
+    const loanDates = useMemo(() => {
+        return Array.from({ length: loanTotalDays }, (_, i) => {
+            const d = parseDate("25.6.26"); 
+            d.setDate(d.getDate() + i);
+            return {
+                day: i + 1,
+                dateObj: d,
+                dateStr: `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear().toString().slice(-2)}`
+            };
+        });
+    }, []);
+
     let timeline: Record<string, any[]> = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const checkDate = new Date(today);
     checkDate.setDate(today.getDate() - 3);
 
+    // စုကြေး အချက်အလက်များကို Timeline ထဲသို့ ထည့်ခြင်း
     groups.forEach(g => {
         g.data.forEach((row, index) => {
             const dateObj = parseDate(row.date);
@@ -332,10 +352,10 @@ export default function App() {
                 
                 const paidAmt = allActualPaid[g.id]?.[index] || 0;
                 const isSelf = allWhoTakes[g.id]?.[index] === 'self' && row.n !== 1;
-                
                 const expectedAmt = paidAmt > 0 ? paidAmt : Math.round(row.price / g.totalMembers);
 
                 timeline[timeKey].push({
+                    isLoan: false,
                     groupId: g.id,
                     groupName: g.name,
                     turn: row.n,
@@ -348,15 +368,29 @@ export default function App() {
         });
     });
 
+    // နေ့ပြန်တိုး အချက်အလက်များကို Timeline (Dashboard) ထဲသို့ အလိုအလျောက် ပေါင်းထည့်ခြင်း
+    loanDates.forEach(ld => {
+        if (ld.dateObj >= checkDate) {
+            const timeKey = ld.dateObj.getTime().toString();
+            if (!timeline[timeKey]) timeline[timeKey] = [];
+            
+            const isPaid = !!loanRepayments[ld.day];
+            
+            timeline[timeKey].push({
+                isLoan: true,
+                groupId: 'daily_loan',
+                groupName: '💸 နေ့ပြန်တိုး (သိန်း ၂၀၀)',
+                turn: ld.day,
+                dateStr: ld.dateStr,
+                paidAmt: isPaid ? loanDailyPayment : 0,
+                expectedAmt: loanDailyPayment, // နေ့တိုင်း ပုံသေထွက်ငွေ
+                isSelf: false
+            });
+        }
+    });
+
     const sortedTimeKeys = Object.keys(timeline).sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 20);
 
-    // နေ့ပြန်တိုးအတွက် တွက်ချက်မှုများ
-    const loanPrincipal = 20000000; // သိန်း ၂၀၀
-    const loanDailyPayment = 371450; // တစ်ရက်ပေးရမည့်ငွေ
-    const loanTotalDays = 70; // စုစုပေါင်း ၇၀ ရက်
-    const loanTotalRepayment = loanDailyPayment * loanTotalDays; // 26,001,500
-    const loanTotalInterest = loanTotalRepayment - loanPrincipal; // 6,001,500
-    
     let loanPaidDaysCount = 0;
     Object.values(loanRepayments).forEach(isPaid => {
         if (isPaid) loanPaidDaysCount++;
@@ -390,7 +424,7 @@ export default function App() {
 
             <div className="max-w-7xl mx-auto px-3 md:px-6">
                 
-                {/* View Switcher Tabs (ယခုအခါ ၃ ခုဖြစ်သွားပါမည်) */}
+                {/* View Switcher Tabs */}
                 <div className="flex flex-wrap md:flex-nowrap bg-white rounded-xl md:rounded-full shadow-sm border border-gray-200 p-1.5 mb-10 max-w-2xl mx-auto gap-1">
                     <button
                         onClick={() => setViewMode('dashboard')}
@@ -440,45 +474,79 @@ export default function App() {
                                     isReceiving = true;
                                 } else {
                                     dailyTotal += e.expectedAmt;
-                                    if (e.paidAmt === 0) pendingCount += 1;
+                                    // နေ့ပြန်တိုးမဟုတ်ဘဲ စုကြေးလေလံမဆွဲရသေးတာကိုသာ pending အဖြစ်ပြမည်
+                                    if (!e.isLoan && e.paidAmt === 0) pendingCount += 1;
                                 }
                             });
 
                             return (
                                 <div key={timeKey} className={`rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md ${isToday ? 'bg-white border-[#cfad5e] ring-2 ring-[#cfad5e]/50' : isPast ? 'bg-gray-50/50 border-gray-200 opacity-70' : 'bg-white border-gray-200'}`}>
                                     <div className={`p-4 border-b flex justify-between items-center ${isToday ? 'bg-[#cfad5e]/20 border-[#cfad5e]/30' : 'bg-gray-50 border-gray-100'}`}>
-                                        <h3 className={`font-black text-lg ${isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
-                                            📅 {events[0].dateStr} {isToday && <span className="ml-2 text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
+                                        <h3 className={`font-black text-lg flex items-center gap-2 ${isToday ? 'text-[#0b3c1a]' : 'text-gray-800'}`}>
+                                            📅 {events[0].dateStr} {isToday && <span className="text-xs bg-[#0b3c1a] text-[#cfad5e] px-2 py-1 rounded-full uppercase tracking-wider">ယနေ့</span>}
                                         </h3>
-                                        <div className="text-sm font-bold text-gray-500">{events.length} ဖွဲ့</div>
+                                        <div className="text-sm font-bold text-gray-500">စုစုပေါင်း - {events.length} ခု</div>
                                     </div>
                                     
                                     <div className="p-4 space-y-3">
                                         {events.map((ev, i) => (
-                                            <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 p-3.5 rounded-lg border border-gray-100 gap-3">
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-[#0b3c1a] text-[15px]">{ev.groupName}</div>
-                                                    <div className="text-sm text-gray-500 font-medium mt-0.5">အလှည့် {ev.turn}</div>
-                                                </div>
-                                                <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
-                                                    <button 
-                                                        onClick={() => { setSelectedGroupId(ev.groupId); setViewMode('group'); }}
-                                                        className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors md:mb-1"
-                                                    >
-                                                        အဖွဲ့သို့သွားရန် →
-                                                    </button>
-                                                    {ev.isSelf ? (
-                                                        <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded">မိမိယူမည့်ရက် 🎉</span>
-                                                    ) : ev.paidAmt > 0 ? (
-                                                        <span className="font-black text-blue-700 text-base">{ev.paidAmt.toLocaleString()} ကျပ်</span>
-                                                    ) : (
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="font-black text-amber-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
-                                                            <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">ခန့်မှန်း (ကြမ်းခင်းစျေး)</span>
+                                            ev.isLoan ? (
+                                                <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-emerald-50/40 p-3.5 rounded-lg border border-emerald-100 gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-emerald-900 text-[15px] flex items-center gap-1.5">
+                                                            {ev.groupName}
                                                         </div>
-                                                    )}
+                                                        <div className="text-sm text-emerald-700 font-semibold mt-0.5">ရက် - {ev.turn}</div>
+                                                    </div>
+                                                    <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
+                                                        <button 
+                                                            onClick={() => setViewMode('loan')}
+                                                            className="text-xs font-bold text-emerald-700 bg-emerald-100/70 px-3 py-1 rounded-full hover:bg-emerald-200 transition-colors md:mb-1 border border-emerald-200"
+                                                        >
+                                                            စာရင်းသို့သွားရန် →
+                                                        </button>
+                                                        {ev.paidAmt > 0 ? (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-black text-emerald-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded mt-0.5 flex items-center gap-1">
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                                    ပေးသွင်းပြီး
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-black text-rose-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">မပေးသွင်းရသေးပါ</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div key={i} className="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 p-3.5 rounded-lg border border-gray-100 gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-[#0b3c1a] text-[15px]">{ev.groupName}</div>
+                                                        <div className="text-sm text-gray-500 font-medium mt-0.5">အလှည့် {ev.turn}</div>
+                                                    </div>
+                                                    <div className="text-right flex items-center md:items-end justify-between md:flex-col w-full md:w-auto">
+                                                        <button 
+                                                            onClick={() => { setSelectedGroupId(ev.groupId); setViewMode('group'); }}
+                                                            className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors md:mb-1"
+                                                        >
+                                                            အဖွဲ့သို့သွားရန် →
+                                                        </button>
+                                                        {ev.isSelf ? (
+                                                            <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded">မိမိယူမည့်ရက် 🎉</span>
+                                                        ) : ev.paidAmt > 0 ? (
+                                                            <span className="font-black text-blue-700 text-base">{ev.paidAmt.toLocaleString()} ကျပ်</span>
+                                                        ) : (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-black text-amber-600 text-base">{ev.expectedAmt.toLocaleString()} ကျပ်</span>
+                                                                <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">ခန့်မှန်း (ကြမ်းခင်းစျေး)</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )
                                         ))}
                                     </div>
                                     
@@ -486,7 +554,7 @@ export default function App() {
                                         <span className="font-bold text-[#0b3c1a]">စုစုပေါင်း ထည့်ရမည့်ငွေ :</span>
                                         <div className="text-right flex flex-col items-center md:items-end">
                                             <span className="font-black text-2xl text-[#0b3c1a]">{dailyTotal.toLocaleString()} ကျပ်</span>
-                                            {pendingCount > 0 && <div className="text-xs text-amber-600 font-bold mt-1">+ အဖွဲ့ ({pendingCount}) ဖွဲ့အတွက် ခန့်မှန်းတွက်ချက်ထားပါသည်</div>}
+                                            {pendingCount > 0 && <div className="text-xs text-amber-600 font-bold mt-1">+ စုကြေး ({pendingCount}) ဖွဲ့အတွက် ခန့်မှန်းတွက်ချက်ထားပါသည်</div>}
                                             {isReceiving && <div className="text-[13px] text-emerald-600 font-black mt-1.5 bg-emerald-100 px-3 py-1 rounded-full shadow-sm">🎉 ယနေ့ မိမိငွေယူမည့်ရက်ဖြစ်ပါသည်</div>}
                                         </div>
                                     </div>
@@ -497,9 +565,6 @@ export default function App() {
 
                 ) : viewMode === 'loan' ? (
                     
-                    /* ==========================================
-                       နေ့ပြန်တိုး (Loan) Tab View 
-                    ========================================== */
                     <div className="max-w-3xl mx-auto">
                         <div className="flex flex-col items-center justify-center mb-8 relative">
                             <h1 className="text-2xl md:text-3xl font-extrabold text-[#0b3c1a] drop-shadow-sm text-center leading-relaxed">
@@ -515,7 +580,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* နေ့ပြန်တိုး Summary Card */}
                         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 md:p-7 mb-8 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-2 bg-[#0b3c1a]"></div>
                             
@@ -553,7 +617,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* နေ့စဉ် ဆပ်ရမည့် Checklist */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
                                 <h3 className="font-bold text-gray-800">ရက် (၇၀) စာရင်း</h3>
@@ -561,11 +624,11 @@ export default function App() {
                             </div>
                             
                             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
-                                {Array.from({ length: loanTotalDays }, (_, i) => i + 1).map(day => {
-                                    const isPaid = !!loanRepayments[day];
+                                {loanDates.map(ld => {
+                                    const isPaid = !!loanRepayments[ld.day];
                                     return (
                                         <label 
-                                            key={day} 
+                                            key={ld.day} 
                                             className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
                                                 isPaid ? 'bg-emerald-50/50 border-emerald-500/50 hover:bg-emerald-50' : 'bg-white border-gray-200 hover:border-gray-300'
                                             }`}
@@ -575,17 +638,19 @@ export default function App() {
                                                     {isPaid && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                                 </div>
                                                 <div>
-                                                    <div className={`font-bold ${isPaid ? 'text-emerald-900' : 'text-gray-700'}`}>ရက် - {day}</div>
-                                                    <div className={`text-xs font-semibold ${isPaid ? 'text-emerald-600' : 'text-gray-500'}`}>{loanDailyPayment.toLocaleString()} ကျပ်</div>
+                                                    <div className={`font-bold flex items-center gap-2 ${isPaid ? 'text-emerald-900' : 'text-gray-700'}`}>
+                                                        ရက် - {ld.day} 
+                                                        <span className={`text-[11px] px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{ld.dateStr}</span>
+                                                    </div>
+                                                    <div className={`text-xs font-semibold mt-0.5 ${isPaid ? 'text-emerald-600' : 'text-gray-500'}`}>{loanDailyPayment.toLocaleString()} ကျပ်</div>
                                                 </div>
                                             </div>
                                             
-                                            {/* ဖုံးကွယ်ထားသော Checkbox အစစ် */}
                                             <input 
                                                 type="checkbox" 
                                                 className="hidden"
                                                 checked={isPaid}
-                                                onChange={() => handleLoanRepaymentToggle(day)}
+                                                onChange={() => handleLoanRepaymentToggle(ld.day)}
                                             />
                                         </label>
                                     );
@@ -596,9 +661,6 @@ export default function App() {
 
                 ) : (
 
-                    /* ==========================================
-                       အဖွဲ့အလိုက် Group Detail View 
-                    ========================================== */
                     <>
                         <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-10 pb-6 border-b border-gray-200">
                             {groups.map(group => (
